@@ -29,12 +29,20 @@ export default async function AdminOrdersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">注文一覧</h1>
-        <Link
-          href="/admin/orders/new"
-          className="bg-slate-900 text-white text-sm rounded-lg px-4 py-2"
-        >
-          + 新規注文
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href="/admin/orders/bulk"
+            className="bg-white border text-sm rounded-lg px-4 py-2 hover:bg-slate-50"
+          >
+            景品セット一括作成
+          </Link>
+          <Link
+            href="/admin/orders/new"
+            className="bg-slate-900 text-white text-sm rounded-lg px-4 py-2"
+          >
+            + 新規注文
+          </Link>
+        </div>
       </div>
 
       {error && <p className="text-red-600 text-sm">読み込みエラー: {error.message}</p>}
@@ -44,6 +52,8 @@ export default async function AdminOrdersPage() {
           <thead className="bg-slate-100 text-left text-slate-500">
             <tr>
               <th className="px-4 py-2">クライアント名</th>
+              <th className="px-4 py-2">景品名</th>
+              <th className="px-4 py-2">個数</th>
               <th className="px-4 py-2">注文日</th>
               <th className="px-4 py-2">納期</th>
               <th className="px-4 py-2">延長確認日</th>
@@ -57,6 +67,8 @@ export default async function AdminOrdersPage() {
             {(orders as Order[] | null)?.map((order) => (
               <tr key={order.id}>
                 <td className="px-4 py-2 font-medium">{order.client_name}</td>
+                <td className="px-4 py-2">{order.prize_label || "-"}</td>
+                <td className="px-4 py-2">{order.quantity ?? "-"}</td>
                 <td className="px-4 py-2">{order.order_date}</td>
                 <td className="px-4 py-2">{order.due_date || "-"}</td>
                 <td className="px-4 py-2">{order.renewal_check_date || "-"}</td>
@@ -84,7 +96,7 @@ export default async function AdminOrdersPage() {
             ))}
             {orders && orders.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={10} className="px-4 py-8 text-center text-slate-400">
                   注文がまだありません
                 </td>
               </tr>

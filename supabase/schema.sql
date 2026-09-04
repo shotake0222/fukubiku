@@ -29,6 +29,7 @@ create table if not exists orders (
   person_in_charge text,                           -- 担当者
   quantity integer,                                -- 個数
   renewal_check_date date,                         -- 延長確認日（1年契約の3ヶ月前を目安）
+  prize_label text,                                -- 景品名(1等/はずれ等、一括作成で使用)
   notes text,
 
   display_type text not null check (display_type in ('aframe', 'mindar')),
@@ -45,6 +46,9 @@ create table if not exists orders (
 );
 
 create index if not exists orders_hash_idx on orders (hash);
+
+-- 既存環境向け: 既にテーブルが存在していた場合にprize_label列を追加する
+alter table orders add column if not exists prize_label text;
 
 -- updated_at 自動更新
 create or replace function set_updated_at()

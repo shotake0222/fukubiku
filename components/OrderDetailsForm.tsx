@@ -4,6 +4,7 @@ import { useState } from "react";
 
 export interface OrderDetailsValue {
   client_name: string;
+  prize_label: string;
   order_date: string;
   due_date: string;
   person_in_charge: string;
@@ -16,6 +17,7 @@ export function emptyOrderDetails(): OrderDetailsValue {
   const today = new Date().toISOString().slice(0, 10);
   return {
     client_name: "",
+    prize_label: "",
     order_date: today,
     due_date: "",
     person_in_charge: "",
@@ -49,6 +51,13 @@ export default function OrderDetailsForm({
           required
           value={value.client_name}
           onChange={(e) => set({ client_name: e.target.value })}
+          className="input"
+        />
+      </Field>
+      <Field label="景品名（1等・はずれ 等）">
+        <input
+          value={value.prize_label}
+          onChange={(e) => set({ prize_label: e.target.value })}
           className="input"
         />
       </Field>

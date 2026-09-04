@@ -31,6 +31,7 @@ export interface Order {
   person_in_charge: string | null;
   quantity: number | null;
   renewal_check_date: string | null;
+  prize_label: string | null;
   notes: string | null;
 
   display_type: DisplayType;

@@ -16,6 +16,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <Link href="/admin/orders/new" className="hover:underline">
               新規注文
             </Link>
+            <Link href="/admin/orders/bulk" className="hover:underline">
+              一括作成
+            </Link>
             <Link href="/admin/presets" className="hover:underline">
               オブジェクト管理
             </Link>
@@ -23,7 +26,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </nav>
         </div>
       </header>
-      <main className="max-w-5xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-6xl mx-auto px-4 py-8">{children}</main>
     </div>
   );
 }

@@ -23,6 +23,7 @@ export default function NewOrderPage() {
       .insert({
         hash: generateHash(),
         client_name: value.client_name,
+        prize_label: value.prize_label || null,
         order_date: value.order_date,
         due_date: value.due_date || null,
         person_in_charge: value.person_in_charge || null,

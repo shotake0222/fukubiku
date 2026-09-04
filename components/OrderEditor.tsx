@@ -55,6 +55,7 @@ export default function OrderEditor({
 
   const [details, setDetails] = useState<OrderDetailsValue>({
     client_name: order.client_name,
+    prize_label: order.prize_label ?? "",
     order_date: order.order_date,
     due_date: order.due_date ?? "",
     person_in_charge: order.person_in_charge ?? "",
@@ -154,6 +155,7 @@ export default function OrderEditor({
       .from("orders")
       .update({
         client_name: details.client_name,
+        prize_label: details.prize_label || null,
         order_date: details.order_date,
         due_date: details.due_date || null,
         person_in_charge: details.person_in_charge || null,
