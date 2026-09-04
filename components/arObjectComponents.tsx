@@ -150,23 +150,47 @@ export function registerAlphaVideoComponent(AFRAME: any) {
 export function ObjectEntity({
   url,
   position = "0 0.6 0",
+  scale,
+  rotationY = 0,
 }: {
   url: string;
   position?: string;
+  scale?: string | null;
+  rotationY?: number;
 }) {
   const kind = assetKind(url);
+  const rotation = `0 ${rotationY} 0`;
   if (kind === "video") {
-    return <a-entity alpha-video={`src: ${url}`} position={position}></a-entity>;
+    return (
+      <a-entity
+        alpha-video={`src: ${url}`}
+        position={position}
+        rotation={rotation}
+        scale={scale || undefined}
+      ></a-entity>
+    );
   }
   if (kind === "image") {
-    return <a-entity gif-image={`src: ${url}`} position={position}></a-entity>;
+    return (
+      <a-entity
+        gif-image={`src: ${url}`}
+        position={position}
+        rotation={rotation}
+        scale={scale || undefined}
+      ></a-entity>
+    );
   }
   return (
     <a-entity
       gltf-model={`url(${url})`}
-      position="0 0 0"
-      scale="0.05 0.05 0.05"
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+      position={position === "0 0.6 0" ? "0 0 0" : position}
+      scale={scale || "0.05 0.05 0.05"}
+      rotation={rotationY ? rotation : undefined}
+      animation={
+        rotationY
+          ? undefined
+          : "property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+      }
     ></a-entity>
   );
 }

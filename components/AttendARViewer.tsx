@@ -15,6 +15,32 @@ import {
 
 const DEFAULT_MARKER_URL = "/markers/patternkuji.patt";
 
+export interface ResolvedObject {
+  url: string;
+  position: string;
+  scale: string | null;
+  rotationY: number;
+}
+
+export interface ResolvedTrigger {
+  id: string;
+  label: string | null;
+  displayType: AttendDisplayType;
+  markerUrl: string | null;
+  mindFileUrl: string | null;
+  faceAnchorIndex: number | null;
+  gpsLat: number | null;
+  gpsLng: number | null;
+  objects: ResolvedObject[];
+}
+
+const displayTypeShortLabel: Record<AttendDisplayType, string> = {
+  aframe: "マーカー",
+  mindar_image: "画像認識",
+  mindar_face: "顔認識",
+  gps: "GPS",
+};
+
 function engineSrcFor(displayType: AttendDisplayType): string | null {
   if (displayType === "aframe" || displayType === "gps") return ARJS_SRC;
   if (displayType === "mindar_image") return MINDAR_IMAGE_AFRAME_SRC;
@@ -22,23 +48,14 @@ function engineSrcFor(displayType: AttendDisplayType): string | null {
   return null;
 }
 
-export default function AttendARViewer({
-  displayType,
-  modelUrl,
-  mindFileUrl,
-  markerUrl,
-  faceAnchorIndex,
-  gpsLat,
-  gpsLng,
-}: {
-  displayType: AttendDisplayType;
-  modelUrl: string | null;
-  mindFileUrl: string | null;
-  markerUrl?: string | null;
-  faceAnchorIndex?: number | null;
-  gpsLat?: number | null;
-  gpsLng?: number | null;
-}) {
+function isTriggerUsable(t: ResolvedTrigger): boolean {
+  if (t.objects.length === 0) return false;
+  if (t.displayType === "mindar_image" && !t.mindFileUrl) return false;
+  if (t.displayType === "gps" && (t.gpsLat == null || t.gpsLng == null)) return false;
+  return true;
+}
+
+function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false);
   const registeredRef = useRef(false);
@@ -53,25 +70,12 @@ export default function AttendARViewer({
   }, [aframeLoaded]);
 
   const ready = aframeLoaded && engineLoaded;
-  const marker = markerUrl || DEFAULT_MARKER_URL;
-  const anchorIndex = faceAnchorIndex ?? 10;
-  const engineSrc = engineSrcFor(displayType);
-
-  const missingContent =
-    !modelUrl ||
-    (displayType === "mindar_image" && !mindFileUrl) ||
-    (displayType === "gps" && (gpsLat == null || gpsLng == null));
-
-  if (missingContent) {
-    return (
-      <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white text-sm px-6 text-center">
-        このコンテンツはまだ準備中です。しばらくしてから再度お試しください。
-      </div>
-    );
-  }
+  const marker = trigger.markerUrl || DEFAULT_MARKER_URL;
+  const anchorIndex = trigger.faceAnchorIndex ?? 10;
+  const engineSrc = engineSrcFor(trigger.displayType);
 
   return (
-    <div className="h-screen w-screen bg-black relative">
+    <div className="h-full w-full bg-black relative">
       <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
       {engineSrc && (
         <Script src={engineSrc} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
@@ -83,9 +87,9 @@ export default function AttendARViewer({
         </div>
       )}
 
-      {ready && displayType === "mindar_image" && modelUrl && (
+      {ready && trigger.displayType === "mindar_image" && (
         <a-scene
-          mindar-image={`imageTargetSrc: ${mindFileUrl}; autoStart: true; uiScanning: yes; uiLoading: yes;`}
+          mindar-image={`imageTargetSrc: ${trigger.mindFileUrl}; autoStart: true; uiScanning: yes; uiLoading: yes;`}
           color-space="sRGB"
           renderer="colorManagement: true, physicallyCorrectLights"
           vr-mode-ui="enabled: false"
@@ -94,12 +98,14 @@ export default function AttendARViewer({
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0">
-            <ObjectEntity url={modelUrl} />
+            {trigger.objects.map((o, i) => (
+              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+            ))}
           </a-entity>
         </a-scene>
       )}
 
-      {ready && displayType === "mindar_face" && modelUrl && (
+      {ready && trigger.displayType === "mindar_face" && (
         <a-scene
           mindar-face="autoStart: true; uiScanning: no; uiLoading: no;"
           color-space="sRGB"
@@ -110,12 +116,14 @@ export default function AttendARViewer({
         >
           <a-camera active="false" position="0 0 0"></a-camera>
           <a-entity mindar-face-target={`anchorIndex: ${anchorIndex}`}>
-            <ObjectEntity url={modelUrl} position="0 0 0" />
+            {trigger.objects.map((o, i) => (
+              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+            ))}
           </a-entity>
         </a-scene>
       )}
 
-      {ready && displayType === "aframe" && modelUrl && (
+      {ready && trigger.displayType === "aframe" && (
         <a-scene
           embedded
           vr-mode-ui="enabled: false"
@@ -123,13 +131,15 @@ export default function AttendARViewer({
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker}>
-            <ObjectEntity url={modelUrl} />
+            {trigger.objects.map((o, i) => (
+              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+            ))}
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>
       )}
 
-      {ready && displayType === "gps" && modelUrl && gpsLat != null && gpsLng != null && (
+      {ready && trigger.displayType === "gps" && trigger.gpsLat != null && trigger.gpsLng != null && (
         <a-scene
           embedded
           vr-mode-ui="enabled: false"
@@ -137,11 +147,54 @@ export default function AttendARViewer({
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-camera gps-camera="gpsMinDistance: 1" rotation-reader></a-camera>
-          <a-entity gps-entity-place={`latitude: ${gpsLat}; longitude: ${gpsLng}`} scale="8 8 8">
-            <ObjectEntity url={modelUrl} position="0 0 0" />
+          <a-entity gps-entity-place={`latitude: ${trigger.gpsLat}; longitude: ${trigger.gpsLng}`} scale="8 8 8">
+            {trigger.objects.map((o, i) => (
+              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+            ))}
           </a-entity>
         </a-scene>
       )}
+    </div>
+  );
+}
+
+export default function AttendARViewer({
+  itemName,
+  triggers,
+}: {
+  itemName: string;
+  triggers: ResolvedTrigger[];
+}) {
+  const usable = triggers.filter(isTriggerUsable);
+  const [activeId, setActiveId] = useState<string | null>(usable[0]?.id ?? null);
+  const active = usable.find((t) => t.id === activeId) ?? usable[0] ?? null;
+
+  if (usable.length === 0) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white text-sm px-6 text-center">
+        このコンテンツはまだ準備中です。しばらくしてから再度お試しください。
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-screen w-screen bg-black relative flex flex-col">
+      {usable.length > 1 && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex gap-2 bg-black/50 backdrop-blur rounded-full p-1">
+          {usable.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setActiveId(t.id)}
+              className={`text-xs px-3 py-1.5 rounded-full whitespace-nowrap ${
+                active?.id === t.id ? "bg-white text-black" : "text-white"
+              }`}
+            >
+              {t.label || displayTypeShortLabel[t.displayType]}
+            </button>
+          ))}
+        </div>
+      )}
+      <div className="flex-1">{active && <TriggerScene key={active.id} trigger={active} />}</div>
     </div>
   );
 }

@@ -126,18 +126,26 @@ export interface AttendProject {
   updated_at: string;
 }
 
-export interface AttendExperience {
+// あてんどの「アイテム」= 柄・グッズ単位。クライアント提供URLはアイテムに1つ発行される。
+// 1アイテムは複数の「発火条件」(attend_triggers)を持て、
+// 例えば同じキーホルダーで「画像トラッキング」と「GPS」の両方を用意できる。
+export interface AttendItem {
   id: string;
   project_id: string;
   name: string;
   hash: string;
   status: AttendExperienceStatus;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
+// 発火条件。1つのアイテムに複数持てる。
+export interface AttendTrigger {
+  id: string;
+  item_id: string;
+  label: string | null;
   display_type: AttendDisplayType;
-
-  object_source: ObjectSource;
-  preset_object_id: string | null;
-  custom_model_url: string | null;
 
   marker_url: string | null;
   target_image_url: string | null;
@@ -148,7 +156,23 @@ export interface AttendExperience {
   gps_lng: number | null;
   gps_radius_m: number | null;
 
-  notes: string | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
 }
+
+// 表示オブジェクト。1つの発火条件に複数持てる(例: 1つのマーカーに複数キャラクターを配置)。
+export interface AttendTriggerObject {
+  id: string;
+  trigger_id: string;
+  object_source: ObjectSource;
+  preset_object_id: string | null;
+  custom_model_url: string | null;
+  position: string;
+  scale: string | null;
+  rotation_y: number;
+  sort_order: number;
+  created_at: string;
+}
+
+export type AttendTriggerWithObjects = AttendTrigger & { objects: AttendTriggerObject[] };
