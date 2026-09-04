@@ -1,4 +1,4 @@
-// A-Frame / MindAR のカスタム要素をJSXで使えるようにする型宣言
+// A-Frame / AR.js / MindAR のカスタム要素をJSXで使えるようにする型宣言
 declare namespace JSX {
   interface IntrinsicElements {
     "a-scene": any;
@@ -8,5 +8,6 @@ declare namespace JSX {
     "a-entity": any;
     "a-gltf-model": any;
     "a-light": any;
+    "a-marker": any;
   }
 }

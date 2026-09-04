@@ -192,7 +192,7 @@ export default function OrderEditor({
                 checked={objectSource === s}
                 onChange={() => setObjectSource(s)}
               />
-              {s === "preset" ? "用意されたオブジェクトから選択" : "独自の3Dモデルをアップロード"}
+              {s === "preset" ? "用意されたテンプレートから選択" : "独自の画像/GIF/3Dモデルをアップロード"}
             </label>
           ))}
         </div>
@@ -227,9 +227,12 @@ export default function OrderEditor({
           <div className="space-y-2">
             <input
               type="file"
-              accept=".glb,.gltf"
+              accept=".glb,.gltf,image/gif,image/*"
               onChange={(e) => e.target.files?.[0] && handleModelUpload(e.target.files[0])}
             />
+            <p className="text-xs text-slate-400">
+              GIF/画像、または.glb形式の3Dモデルをアップロードできます。
+            </p>
             {modelUploading && <p className="text-sm text-slate-500">アップロード中...</p>}
             {customModelUrl && (
               <p className="text-xs text-emerald-700 break-all">アップロード済み: {customModelUrl}</p>
