@@ -6,6 +6,9 @@
 // - registerAlphaVideoComponent: 透過MP4(左半分RGB/右半分アルファ)を再生するA-Frameコンポーネント
 // - ObjectEntity: 上記を踏まえてURLに応じた<a-entity>を出し分ける共通コンポーネント
 //   (.glbの場合はanimation-mixer(aframe-extras)で埋め込みアニメーションを自動再生する)
+//   visible=falseの間はDOM上に残したまま非表示にする(結果発表を焦らす間もアセットの先読みを進めるため)
+// - SuspenseEntity: 結果(ObjectEntity)が表示されるまでの「焦らし」演出用プレースホルダー。
+//   何の絵柄か分からないガチャカプセル風のオブジェクトを高速回転+上下バウンドさせる。
 
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
@@ -157,14 +160,18 @@ export function ObjectEntity({
   position = "0 0.6 0",
   scale,
   rotationY = 0,
+  visible = true,
 }: {
   url: string;
   position?: string;
   scale?: string | null;
   rotationY?: number;
+  /** falseの間もエンティティ自体はマウントしたままにする(動画のプリロード/再生開始やモデルの読み込みを裏で進めるため)。 */
+  visible?: boolean;
 }) {
   const kind = assetKind(url);
   const rotation = `0 ${rotationY} 0`;
+  const visibleAttr = visible ? "true" : "false";
   if (kind === "video") {
     return (
       <a-entity
@@ -172,6 +179,7 @@ export function ObjectEntity({
         position={position}
         rotation={rotation}
         scale={scale || undefined}
+        visible={visibleAttr}
       ></a-entity>
     );
   }
@@ -182,6 +190,7 @@ export function ObjectEntity({
         position={position}
         rotation={rotation}
         scale={scale || undefined}
+        visible={visibleAttr}
       ></a-entity>
     );
   }
@@ -199,6 +208,52 @@ export function ObjectEntity({
           ? undefined
           : "property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
       }
+      visible={visibleAttr}
     ></a-entity>
+  );
+}
+
+// 結果発表前の「焦らし」演出プレースホルダー。中身が分からないガチャカプセルを模したオブジェクトで、
+// ObjectEntityと同じposition/scaleの既定値を使うことで、結果発表時に違和感なく差し替わるようにしている。
+export function SuspenseEntity({
+  position = "0 0.6 0",
+  scale,
+}: {
+  position?: string;
+  scale?: string | null;
+}) {
+  const entityPosition = position === "0 0.6 0" ? "0 0 0" : position;
+  return (
+    <a-entity position={entityPosition} scale={scale || "0.05 0.05 0.05"}>
+      <a-entity
+        animation__spin="property: rotation; to: 0 360 0; loop: true; dur: 700; easing: linear"
+        animation__bob="property: position; dir: alternate; loop: true; dur: 500; easing: easeInOutSine; to: 0 0.18 0"
+      >
+        <a-sphere radius="0.55" color="#ff4d6d" theta-start="0" theta-length="90"></a-sphere>
+        <a-sphere radius="0.55" color="#ffffff" theta-start="90" theta-length="90"></a-sphere>
+        <a-torus
+          radius="0.56"
+          radius-tubular="0.03"
+          segments-tubular="24"
+          color="#222222"
+          rotation="90 0 0"
+        ></a-torus>
+        <a-text
+          value="?"
+          align="center"
+          color="#222222"
+          width="4"
+          position="0 0 0.58"
+        ></a-text>
+        <a-text
+          value="?"
+          align="center"
+          color="#222222"
+          width="4"
+          position="0 0 -0.58"
+          rotation="0 180 0"
+        ></a-text>
+      </a-entity>
+    </a-entity>
   );
 }

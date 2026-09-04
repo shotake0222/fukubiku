@@ -9,5 +9,8 @@ declare namespace JSX {
     "a-gltf-model": any;
     "a-light": any;
     "a-marker": any;
+    "a-sphere": any;
+    "a-torus": any;
+    "a-text": any;
   }
 }
