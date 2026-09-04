@@ -32,7 +32,7 @@ export default async function AttendItemPage({ params }: { params: { id: string 
     supabase
       .from("preset_objects")
       .select("*")
-      .or("service.eq.attend,service.is.null")
+      .eq("service", "attend")
       .order("created_at", { ascending: false }),
     supabase
       .from("attend_triggers")

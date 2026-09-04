@@ -13,7 +13,7 @@ export default async function OrderEditPage({ params }: { params: { id: string }
     supabase
       .from("preset_objects")
       .select("*")
-      .or("service.eq.fukubiku,service.is.null")
+      .eq("service", "fukubiku")
       .order("created_at", { ascending: false }),
   ]);
 

@@ -7,12 +7,6 @@ import { PRESET_CATEGORIES, type PresetObject, type ServiceTag } from "@/lib/typ
 const ASSET_BUCKET = "assets";
 const OTHER_CATEGORY = "__other__";
 
-const SERVICE_LABEL: Record<string, string> = {
-  "": "共通(両サービス)",
-  fukubiku: "fukubiku専用",
-  attend: "あてんど専用",
-};
-
 function extOf(name: string) {
   const m = name.match(/\.[a-zA-Z0-9]+$/);
   return m ? m[0] : "";
@@ -48,18 +42,24 @@ function Preview({ url }: { url: string }) {
   );
 }
 
-export default function PresetManager({ initialPresets }: { initialPresets: PresetObject[] }) {
+export default function PresetManager({
+  initialPresets,
+  service,
+  serviceLabel,
+}: {
+  initialPresets: PresetObject[];
+  service: ServiceTag;
+  serviceLabel: string;
+}) {
   const supabase = useMemo(() => createClient(), []);
   const [presets, setPresets] = useState(initialPresets);
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>(PRESET_CATEGORIES[0].value);
-  const [service, setService] = useState<string>("");
   const [customCategory, setCustomCategory] = useState("");
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
   const [saving, setSaving] = useState(false);
   const [replacingId, setReplacingId] = useState<string | null>(null);
-  const [updatingServiceId, setUpdatingServiceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function uploadToAssets(path: string, file: File) {
@@ -96,7 +96,7 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
           category: finalCategory,
           model_url: modelUrl,
           thumbnail_url: thumbUrl,
-          service: service || null,
+          service,
         })
         .select("*")
         .single();
@@ -107,7 +107,6 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
       setModelFile(null);
       setThumbFile(null);
       setCustomCategory("");
-      setService("");
     } catch (err: any) {
       setError(`登録に失敗しました: ${err.message ?? err}`);
     } finally {
@@ -132,25 +131,6 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
       setError(`差し替えに失敗しました: ${err.message ?? err}`);
     } finally {
       setReplacingId(null);
-    }
-  }
-
-  async function handleServiceChange(id: string, nextService: string) {
-    setUpdatingServiceId(id);
-    setError(null);
-    try {
-      const { error } = await supabase
-        .from("preset_objects")
-        .update({ service: nextService || null })
-        .eq("id", id);
-      if (error) throw error;
-      setPresets((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, service: (nextService || null) as ServiceTag | null } : p))
-      );
-    } catch (err: any) {
-      setError(`サービス設定の変更に失敗しました: ${err.message ?? err}`);
-    } finally {
-      setUpdatingServiceId(null);
     }
   }
 
@@ -180,7 +160,10 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
 
   return (
     <div className="max-w-4xl space-y-6">
-      <h1 className="text-lg font-bold">表示オブジェクト管理（テンプレートライブラリ）</h1>
+      <h1 className="text-lg font-bold">表示オブジェクト管理（{serviceLabel}専用テンプレートライブラリ）</h1>
+      <p className="text-xs text-slate-500">
+        ここに登録したオブジェクトは{serviceLabel}の編集画面にのみ表示されます。他サービスとは完全に分かれています。
+      </p>
 
       <form onSubmit={handleAdd} className="bg-white rounded-xl shadow p-6 space-y-4">
         <h2 className="font-semibold">新規オブジェクト登録</h2>
@@ -213,14 +196,6 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
           </label>
         )}
         <label className="space-y-1 block">
-          <span className="text-sm font-medium">利用サービス</span>
-          <select value={service} onChange={(e) => setService(e.target.value)} className="input">
-            <option value="">共通(fukubiku / あてんど両方)</option>
-            <option value="fukubiku">fukubiku専用</option>
-            <option value="attend">あてんど専用</option>
-          </select>
-        </label>
-        <label className="space-y-1 block">
           <span className="text-sm font-medium">表示オブジェクト（動画.mp4 / GIF / 画像 / .glb） *</span>
           <input
             type="file"
@@ -251,16 +226,6 @@ export default function PresetManager({ initialPresets }: { initialPresets: Pres
               <div key={p.id} className="border rounded-lg p-2 text-xs space-y-2 bg-white">
                 <Preview url={p.thumbnail_url || p.model_url} />
                 <div className="truncate font-medium">{p.name}</div>
-                <select
-                  value={p.service || ""}
-                  disabled={updatingServiceId === p.id}
-                  onChange={(e) => handleServiceChange(p.id, e.target.value)}
-                  className="w-full text-[10px] border rounded px-1 py-0.5"
-                >
-                  <option value="">{SERVICE_LABEL[""]}</option>
-                  <option value="fukubiku">{SERVICE_LABEL["fukubiku"]}</option>
-                  <option value="attend">{SERVICE_LABEL["attend"]}</option>
-                </select>
                 <div className="flex items-center justify-between gap-1">
                   <label className="text-blue-600 hover:underline cursor-pointer">
                     {replacingId === p.id ? "差し替え中..." : "ファイル差し替え"}

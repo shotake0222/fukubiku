@@ -8,7 +8,7 @@ export default function AttendLayout({ children }: { children: React.ReactNode }
         <span className="font-bold">あてんど</span>
         <Link href="/admin/attend" className="hover:underline">案件一覧</Link>
         <Link href="/admin/attend/projects/new" className="hover:underline">新規案件</Link>
-        <Link href="/admin/presets" className="hover:underline">オブジェクト管理</Link>
+        <Link href="/admin/attend/presets" className="hover:underline">オブジェクト管理</Link>
       </nav>
       {children}
     </div>

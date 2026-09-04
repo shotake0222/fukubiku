@@ -17,7 +17,7 @@ export default function FukubikuLayout({ children }: { children: React.ReactNode
         <Link href="/admin/fukubiku/orders/bulk" className="hover:underline">
           一括作成
         </Link>
-        <Link href="/admin/presets" className="hover:underline">
+        <Link href="/admin/fukubiku/presets" className="hover:underline">
           オブジェクト管理
         </Link>
       </nav>

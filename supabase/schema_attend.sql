@@ -7,7 +7,12 @@
 -- このSQLはそのデータを新構造(attend_items / attend_triggers / attend_trigger_objects)へ
 -- 安全に移行したうえで実行できます(再実行しても壊れません)。
 
-alter table preset_objects add column if not exists service text; -- 'fukubiku' | 'attend' | null(共通)
+alter table preset_objects add column if not exists service text; -- 'fukubiku' | 'attend'
+
+-- fukubiku/あてんどは完全に別サービスとして画面も分離したため、
+-- サービス未設定(過去に作成された、実質すべてfukubiku用)のプリセットは
+-- fukubikuに寄せておく（あてんど側の画面に紛れ込まないようにするため）
+update preset_objects set service = 'fukubiku' where service is null;
 
 -- 案件（クライアント単位）
 create table if not exists attend_projects (
