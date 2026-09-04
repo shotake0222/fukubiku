@@ -145,7 +145,7 @@ export default function AttendProjectEditor({
           </div>
           {nfcPct !== null && (
             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
-              <div className="bg-sky-500 h-2" style={{ width: `${nfcPct}%` }} />
+              <div className="bg-pink-500 h-2" style={{ width: `${nfcPct}%` }} />
             </div>
           )}
         </div>
@@ -166,7 +166,7 @@ export default function AttendProjectEditor({
           <button
             onClick={handleAddItem}
             disabled={addingItem}
-            className="bg-sky-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
+            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
           >
             {addingItem ? "追加中..." : "+ アイテムを追加"}
           </button>

@@ -100,8 +100,8 @@ export default function AttendProjectForm({
         </label>
       </div>
 
-      <div className="bg-sky-50 border border-sky-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
-        <p className="font-semibold text-sky-800">
+      <div className="bg-pink-50 border border-pink-200 rounded-lg p-3 text-xs text-slate-600 space-y-1">
+        <p className="font-semibold text-pink-800">
           {limits.label}プランの目安（表示のみ・強制制限はありません）
         </p>
         <p>GPS拠点数: {limits.gpsPoints} / ARモデル種類: {limits.arModels} / NFCタグ: {limits.nfcTags} / 解析: {limits.analytics}</p>

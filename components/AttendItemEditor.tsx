@@ -608,7 +608,7 @@ export default function AttendItemEditor({
           <button
             onClick={handleAddTrigger}
             disabled={addingTrigger}
-            className="bg-sky-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
+            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
           >
             {addingTrigger ? "追加中..." : "+ 発火条件を追加"}
           </button>
