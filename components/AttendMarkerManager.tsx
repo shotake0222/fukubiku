@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Script from "next/script";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTargets, loadImageElement, loadImageElementFromUrl } from "@/lib/mindCompiler";
 import type { AttendMarkerType, AttendMarkerWithProject, AttendProject } from "@/lib/types";
 
 const ASSET_BUCKET = "assets";
@@ -16,13 +16,13 @@ function extOf(name: string) {
 function Preview({ url }: { url: string | null }) {
   if (!url) {
     return (
-      <div className="w-full h-20 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">
+      <div className="w-full h-16 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">
         画像なし
       </div>
     );
   }
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={url} alt="" className="w-full h-20 object-contain rounded bg-slate-50 border" />;
+  return <img src={url} alt="" className="w-full h-16 object-contain rounded bg-slate-50 border" />;
 }
 
 async function uploadToAssets(supabase: ReturnType<typeof createClient>, path: string, file: File | Blob, contentType?: string) {
@@ -47,12 +47,13 @@ export default function AttendMarkerManager({
   const [notes, setNotes] = useState("");
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [patternFile, setPatternFile] = useState<File | null>(null);
-  const [targetImageFile, setTargetImageFile] = useState<File | null>(null);
+  const [targetImageFiles, setTargetImageFiles] = useState<File[]>([]);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [addingImageToId, setAddingImageToId] = useState<string | null>(null);
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -65,8 +66,8 @@ export default function AttendMarkerManager({
       setError("AR.jsマーカーの.pattファイルを選択してください（AR.js Marker Trainingツールで生成したもの）");
       return;
     }
-    if (type === "mindar_image" && !targetImageFile) {
-      setError("MindARのターゲット画像を選択してください");
+    if (type === "mindar_image" && targetImageFiles.length === 0) {
+      setError("MindARのターゲット画像を1枚以上選択してください（複数選択可）");
       return;
     }
 
@@ -75,8 +76,8 @@ export default function AttendMarkerManager({
       const id = crypto.randomUUID();
       let previewImageUrl: string | null = null;
       let patternFileUrl: string | null = null;
-      let targetImageUrl: string | null = null;
       let mindFileUrl: string | null = null;
+      let imageRows: { target_index: number; name: string | null; image_url: string }[] = [];
 
       if (type === "aframe") {
         patternFileUrl = await uploadToAssets(
@@ -94,53 +95,127 @@ export default function AttendMarkerManager({
           );
         }
       } else {
-        targetImageUrl = await uploadToAssets(
-          supabase,
-          `attend-markers/${id}/target-original${extOf(targetImageFile!.name) || ".jpg"}`,
-          targetImageFile!,
-          targetImageFile!.type || "image/jpeg"
-        );
-        previewImageUrl = targetImageUrl;
         setCompileProgress(0);
-        const blob = await compileMindTarget(targetImageFile!, (p) => setCompileProgress(p));
-        mindFileUrl = await uploadToAssets(
-          supabase,
-          `attend-markers/${id}/target.mind`,
-          blob,
-          "application/octet-stream"
-        );
+        const uploadedUrls: string[] = [];
+        for (let i = 0; i < targetImageFiles.length; i++) {
+          const f = targetImageFiles[i];
+          const url = await uploadToAssets(
+            supabase,
+            `attend-markers/${id}/image-${i}${extOf(f.name) || ".jpg"}`,
+            f,
+            f.type || "image/jpeg"
+          );
+          uploadedUrls.push(url);
+        }
+        previewImageUrl = uploadedUrls[0] ?? null;
+        imageRows = uploadedUrls.map((url, i) => ({ target_index: i, name: targetImageFiles[i].name, image_url: url }));
+
+        const imgElements = await Promise.all(targetImageFiles.map((f) => loadImageElement(f)));
+        const blob = await compileMindTargets(imgElements, (p) => setCompileProgress(p));
+        mindFileUrl = await uploadToAssets(supabase, `attend-markers/${id}/target.mind`, blob, "application/octet-stream");
         setCompileProgress(null);
       }
 
-      const { data, error } = await supabase
+      const { data: markerRow, error: insertError } = await supabase
         .from("attend_markers")
         .insert({
           id,
           project_id: projectId,
           type,
-          name: name || (type === "aframe" ? "無題のマーカー" : "無題のターゲット画像"),
+          name: name || (type === "aframe" ? "無題のマーカー" : "無題のターゲット画像セット"),
           preview_image_url: previewImageUrl,
           pattern_file_url: patternFileUrl,
-          target_image_url: targetImageUrl,
           mind_file_url: mindFileUrl,
           notes: notes || null,
         })
         .select("*")
         .single();
-      if (error) throw error;
+      if (insertError) throw insertError;
+
+      let insertedImages: any[] = [];
+      if (imageRows.length > 0) {
+        const { data: imgData, error: imgError } = await supabase
+          .from("attend_marker_images")
+          .insert(imageRows.map((r) => ({ marker_id: id, ...r })))
+          .select("*");
+        if (imgError) throw imgError;
+        insertedImages = imgData ?? [];
+      }
 
       const project = projects.find((p) => p.id === projectId);
-      setMarkers((prev) => [{ ...(data as any), project_name: project?.client_name ?? "" }, ...prev]);
+      setMarkers((prev) => [
+        { ...(markerRow as any), images: insertedImages, project_name: project?.client_name ?? "" },
+        ...prev,
+      ]);
       setName("");
       setNotes("");
       setPreviewFile(null);
       setPatternFile(null);
-      setTargetImageFile(null);
+      setTargetImageFiles([]);
     } catch (err: any) {
       setError(`登録に失敗しました: ${err.message ?? err}`);
       setCompileProgress(null);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAddImageToMarker(marker: AttendMarkerWithProject, files: FileList) {
+    setError(null);
+    setAddingImageToId(marker.id);
+    setCompileProgress(0);
+    try {
+      const newFiles = Array.from(files);
+      const startIndex = marker.images.length;
+      const uploadedNew: { target_index: number; name: string | null; image_url: string }[] = [];
+      for (let i = 0; i < newFiles.length; i++) {
+        const f = newFiles[i];
+        const url = await uploadToAssets(
+          supabase,
+          `attend-markers/${marker.id}/image-${startIndex + i}-${Date.now()}${extOf(f.name) || ".jpg"}`,
+          f,
+          f.type || "image/jpeg"
+        );
+        uploadedNew.push({ target_index: startIndex + i, name: f.name, image_url: url });
+      }
+
+      // 既存画像 + 新規画像 をすべて読み込み直して.mindを再コンパイル(順序=targetIndexを維持)
+      const existingElements = await Promise.all(
+        marker.images.map((im) => loadImageElementFromUrl(im.image_url))
+      );
+      const newElements = await Promise.all(newFiles.map((f) => loadImageElement(f)));
+      const blob = await compileMindTargets([...existingElements, ...newElements], (p) => setCompileProgress(p));
+      const mindFileUrl = await uploadToAssets(
+        supabase,
+        `attend-markers/${marker.id}/target-${Date.now()}.mind`,
+        blob,
+        "application/octet-stream"
+      );
+
+      const { data: imgData, error: imgError } = await supabase
+        .from("attend_marker_images")
+        .insert(uploadedNew.map((r) => ({ marker_id: marker.id, ...r })))
+        .select("*");
+      if (imgError) throw imgError;
+
+      const { error: updateError } = await supabase
+        .from("attend_markers")
+        .update({ mind_file_url: mindFileUrl })
+        .eq("id", marker.id);
+      if (updateError) throw updateError;
+
+      setMarkers((prev) =>
+        prev.map((m) =>
+          m.id === marker.id
+            ? { ...m, mind_file_url: mindFileUrl, images: [...m.images, ...((imgData as any) ?? [])] }
+            : m
+        )
+      );
+    } catch (err: any) {
+      setError(`画像の追加に失敗しました: ${err.message ?? err}`);
+    } finally {
+      setCompileProgress(null);
+      setAddingImageToId(null);
     }
   }
 
@@ -176,6 +251,8 @@ export default function AttendMarkerManager({
       <h1 className="text-lg font-bold">マーカー管理</h1>
       <p className="text-xs text-slate-500">
         A-Frame(AR.js)のマーカーとMindARのイメージトラッキング用画像を、案件・企業ごとに登録して管理します。
+        MindARは複数の画像を1つの.mindファイルにまとめて同時にトラッキングできるのが標準の使い方のため、
+        1つのマーカーに画像を複数枚登録できます（例: シリーズ物のグッズをまとめて1つのマーカーとして管理）。
         発火条件の編集画面から選択して使い回せます。
       </p>
 
@@ -198,7 +275,12 @@ export default function AttendMarkerManager({
           </label>
           <label className="space-y-1 block">
             <span className="text-sm font-medium">マーカー名</span>
-            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例: パンフレット表紙" className="input" />
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="例: パンフレット表紙シリーズ"
+              className="input"
+            />
           </label>
         </div>
 
@@ -238,15 +320,21 @@ export default function AttendMarkerManager({
         ) : (
           <div className="space-y-2">
             <label className="space-y-1 block">
-              <span className="text-sm font-medium">ターゲット画像 *</span>
+              <span className="text-sm font-medium">ターゲット画像 *（複数選択可）</span>
               <input
                 type="file"
                 accept="image/*"
+                multiple
                 disabled={!mindarReady}
-                onChange={(e) => setTargetImageFile(e.target.files?.[0] ?? null)}
+                onChange={(e) => setTargetImageFiles(e.target.files ? Array.from(e.target.files) : [])}
               />
             </label>
-            <p className="text-xs text-slate-500">アップロードすると自動で.mindファイルにコンパイルされます。</p>
+            {targetImageFiles.length > 0 && (
+              <p className="text-xs text-slate-500">{targetImageFiles.length}枚選択中（この順番でtargetIndexが割り当てられます）</p>
+            )}
+            <p className="text-xs text-slate-500">
+              アップロードすると自動で1つの.mindファイルにまとめてコンパイルされます。あとから画像を追加登録することもできます。
+            </p>
             {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
             {compileProgress !== null && <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>}
           </div>
@@ -270,22 +358,50 @@ export default function AttendMarkerManager({
       {groupedByProject.map((g) => (
         <div key={g.projectId} className="space-y-2">
           <h3 className="text-sm font-semibold text-slate-700">{g.name}</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {g.items.map((m) => (
               <div key={m.id} className="border rounded-lg p-2 text-xs space-y-2 bg-white">
-                <Preview url={m.preview_image_url} />
+                {m.type === "mindar_image" && m.images.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-1">
+                    {m.images.map((im) => (
+                      <div key={im.id} className="relative">
+                        <Preview url={im.image_url} />
+                        <span className="absolute top-0 left-0 bg-black/60 text-white text-[9px] px-1 rounded-br">
+                          {im.target_index}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Preview url={m.preview_image_url} />
+                )}
                 <div className="truncate font-medium">{m.name}</div>
                 <div className="text-[10px] text-slate-400">
-                  {m.type === "aframe" ? "A-Frame(.patt)" : "MindAR(画像)"}
+                  {m.type === "aframe" ? "A-Frame(.patt)" : `MindAR(画像 ${m.images.length}枚)`}
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(m.id)}
-                  disabled={deletingId === m.id}
-                  className="text-red-600 hover:underline"
-                >
-                  {deletingId === m.id ? "削除中..." : "削除"}
-                </button>
+                <div className="flex items-center justify-between gap-1">
+                  {m.type === "mindar_image" && (
+                    <label className="text-blue-600 hover:underline cursor-pointer">
+                      {addingImageToId === m.id ? "追加中..." : "+ 画像を追加"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        className="hidden"
+                        disabled={addingImageToId === m.id || !mindarReady}
+                        onChange={(e) => e.target.files?.length && handleAddImageToMarker(m, e.target.files)}
+                      />
+                    </label>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(m.id)}
+                    disabled={deletingId === m.id}
+                    className="text-red-600 hover:underline ml-auto"
+                  >
+                    {deletingId === m.id ? "削除中..." : "削除"}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

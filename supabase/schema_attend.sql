@@ -216,3 +216,33 @@ create policy "authenticated read attend_markers" on attend_markers
 drop policy if exists "authenticated write attend_markers" on attend_markers;
 create policy "authenticated write attend_markers" on attend_markers
   for all to authenticated using (true) with check (true);
+
+-- MindARは複数の画像を1つの.mindファイルにまとめてコンパイルし、同時に複数の絵柄を
+-- トラッキングできるのが標準の使い方。attend_markers(type='mindar_image')を
+-- 「1つの.mindにまとめる画像セット」として扱えるよう、画像を複数持てるようにする。
+create table if not exists attend_marker_images (
+  id uuid primary key default gen_random_uuid(),
+  marker_id uuid not null references attend_markers(id) on delete cascade,
+  target_index integer not null,  -- compileImageTargetsに渡した配列の順序 = mindar-image-targetのtargetIndex
+  name text,
+  image_url text not null,
+  created_at timestamptz not null default now()
+);
+
+create unique index if not exists attend_marker_images_marker_target_idx
+  on attend_marker_images (marker_id, target_index);
+
+alter table attend_marker_images enable row level security;
+drop policy if exists "authenticated read attend_marker_images" on attend_marker_images;
+create policy "authenticated read attend_marker_images" on attend_marker_images
+  for select to authenticated using (true);
+drop policy if exists "authenticated write attend_marker_images" on attend_marker_images;
+create policy "authenticated write attend_marker_images" on attend_marker_images
+  for all to authenticated using (true) with check (true);
+
+-- 発火条件がマーカーライブラリのどのマーカーを使っているか（複数画像セットの解決に使う）
+alter table attend_triggers add column if not exists marker_id uuid references attend_markers(id) on delete set null;
+
+-- オブジェクトを、複数画像マーカーのうちどの画像(targetIndex)が検出された時に表示するかの指定。
+-- 単一画像のマーカー/aframe/gps/faceでは未使用(null=常に表示)。
+alter table attend_trigger_objects add column if not exists target_index integer;

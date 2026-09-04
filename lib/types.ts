@@ -171,6 +171,10 @@ export interface AttendTrigger {
   mind_file_url: string | null;
   face_anchor_index: number | null;
 
+  // マーカーライブラリ(attend_markers)のどのマーカーを使っているか。
+  // mindar_imageで複数画像セットのマーカーを使う場合、対象画像の解決に必要。
+  marker_id: string | null;
+
   gps_lat: number | null;
   gps_lng: number | null;
   gps_radius_m: number | null;
@@ -190,6 +194,9 @@ export interface AttendTriggerObject {
   position: string;
   scale: string | null;
   rotation_y: number;
+  // mindar_imageで複数画像セットのマーカーを使う場合、どの画像(targetIndex)が
+  // 検出された時にこのオブジェクトを表示するか。null=常に表示(単一画像時など)。
+  target_index: number | null;
   sort_order: number;
   created_at: string;
 }
@@ -198,7 +205,21 @@ export type AttendTriggerWithObjects = AttendTrigger & { objects: AttendTriggerO
 
 // マーカー管理（案件ごとのAR.jsマーカー/MindARターゲット画像のライブラリ）。
 // 発火条件から選んで使い回せるようにするための、案件に紐づいたマーカーレジストリ。
+//
+// mindar_imageタイプは、MindARの標準機能である「複数画像を1つの.mindにまとめて同時
+// トラッキングする」構成をそのまま使う。1つのattend_markersが「画像セット」を表し、
+// 実際の画像は複数枚持てる attend_marker_images に格納、mind_file_url はその画像セット
+// 全体をコンパイルした結果(1ファイル)を指す。
 export type AttendMarkerType = "aframe" | "mindar_image";
+
+export interface AttendMarkerImage {
+  id: string;
+  marker_id: string;
+  target_index: number;
+  name: string | null;
+  image_url: string;
+  created_at: string;
+}
 
 export interface AttendMarker {
   id: string;
@@ -207,13 +228,17 @@ export interface AttendMarker {
   name: string;
   preview_image_url: string | null;
   pattern_file_url: string | null; // aframe用 .patt
-  target_image_url: string | null; // mindar_image用の元画像
-  mind_file_url: string | null; // mindar_image用のコンパイル済み.mind
+  target_image_url: string | null; // 旧: mindar_image単一画像時代の元画像(互換用、新規には使わない)
+  mind_file_url: string | null; // mindar_image用: 画像セット全体をコンパイルした.mind
   notes: string | null;
   created_at: string;
   updated_at: string;
 }
 
-export interface AttendMarkerWithProject extends AttendMarker {
+export interface AttendMarkerWithImages extends AttendMarker {
+  images: AttendMarkerImage[];
+}
+
+export interface AttendMarkerWithProject extends AttendMarkerWithImages {
   project_name: string;
 }

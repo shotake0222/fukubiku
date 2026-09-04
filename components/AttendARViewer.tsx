@@ -20,6 +20,8 @@ export interface ResolvedObject {
   position: string;
   scale: string | null;
   rotationY: number;
+  /** mindar_imageで複数画像マーカーを使う場合、どの画像(targetIndex)で表示するか。nullは全画像共通で表示。 */
+  targetIndex: number | null;
 }
 
 export interface ResolvedTrigger {
@@ -31,6 +33,8 @@ export interface ResolvedTrigger {
   faceAnchorIndex: number | null;
   gpsLat: number | null;
   gpsLng: number | null;
+  /** mindar_imageの.mindファイルに含まれる画像のtargetIndex一覧(検出対象として描画するエンティティ数)。未指定時は[0]。 */
+  targetImageIndices: number[];
   objects: ResolvedObject[];
 }
 
@@ -97,11 +101,15 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
           embedded
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
-          <a-entity mindar-image-target="targetIndex: 0">
-            {trigger.objects.map((o, i) => (
-              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
-            ))}
-          </a-entity>
+          {(trigger.targetImageIndices.length > 0 ? trigger.targetImageIndices : [0]).map((idx) => (
+            <a-entity key={idx} mindar-image-target={`targetIndex: ${idx}`}>
+              {trigger.objects
+                .filter((o) => o.targetIndex == null || o.targetIndex === idx)
+                .map((o, i) => (
+                  <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+                ))}
+            </a-entity>
+          ))}
         </a-scene>
       )}
 

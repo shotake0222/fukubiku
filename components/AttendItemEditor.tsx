@@ -9,7 +9,8 @@ import type {
   AttendDisplayType,
   AttendExperienceStatus,
   AttendItem,
-  AttendMarker,
+  AttendMarkerImage,
+  AttendMarkerWithImages,
   AttendProject,
   AttendTriggerObject,
   AttendTriggerWithObjects,
@@ -59,11 +60,14 @@ function ObjectRow({
   itemHash,
   object,
   presets,
+  targetImages,
   onDeleted,
 }: {
   itemHash: string;
   object: AttendTriggerObject;
   presets: PresetObject[];
+  /** mindar_imageで複数画像マーカーを使う発火条件の場合、その画像一覧(targetIndexの選択肢)。 */
+  targetImages: AttendMarkerImage[];
   onDeleted: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
@@ -73,6 +77,9 @@ function ObjectRow({
   const [position, setPosition] = useState(object.position || "0 0.6 0");
   const [scale, setScale] = useState(object.scale || "");
   const [rotationY, setRotationY] = useState(String(object.rotation_y ?? 0));
+  const [targetIndex, setTargetIndex] = useState<number | "">(
+    object.target_index != null ? object.target_index : ""
+  );
   const [category, setCategory] = useState<string>(
     presets.find((p) => p.id === object.preset_object_id)?.category || PRESET_CATEGORIES[0]?.value || UNCATEGORIZED
   );
@@ -187,6 +194,28 @@ function ObjectRow({
             </div>
           )}
 
+          {targetImages.length > 1 && (
+            <label className="text-[10px] text-slate-500 space-y-0.5 block">
+              対象画像（このオブジェクトを表示する画像）
+              <select
+                value={targetIndex}
+                onChange={(e) => {
+                  const v = e.target.value === "" ? "" : Number(e.target.value);
+                  setTargetIndex(v);
+                  patch({ target_index: v === "" ? null : v });
+                }}
+                className="input text-xs py-1"
+              >
+                <option value="">すべての画像で表示</option>
+                {targetImages.map((im) => (
+                  <option key={im.id} value={im.target_index}>
+                    {im.name || `画像${im.target_index + 1}`}（targetIndex: {im.target_index}）
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
           <div className="grid grid-cols-3 gap-2">
             <label className="text-[10px] text-slate-500 space-y-0.5 block">
               位置(x y z)
@@ -237,7 +266,7 @@ function TriggerCard({
   itemHash: string;
   trigger: AttendTriggerWithObjects;
   presets: PresetObject[];
-  markers: AttendMarker[];
+  markers: AttendMarkerWithImages[];
   onDeleted: () => void;
   onObjectsChanged: () => void;
 }) {
@@ -251,9 +280,12 @@ function TriggerCard({
   const [gpsLat, setGpsLat] = useState(trigger.gps_lat != null ? String(trigger.gps_lat) : "");
   const [gpsLng, setGpsLng] = useState(trigger.gps_lng != null ? String(trigger.gps_lng) : "");
   const [gpsRadius, setGpsRadius] = useState(String(trigger.gps_radius_m ?? 20));
+  const [markerId, setMarkerId] = useState<string | null>(trigger.marker_id);
 
   const aframeMarkers = markers.filter((m) => m.type === "aframe");
   const mindarMarkers = markers.filter((m) => m.type === "mindar_image");
+  const selectedMindarMarker = mindarMarkers.find((m) => m.id === markerId) ?? null;
+  const targetImagesForObjects = displayType === "mindar_image" ? selectedMindarMarker?.images ?? [] : [];
 
   const [markerUploading, setMarkerUploading] = useState(false);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
@@ -272,6 +304,7 @@ function TriggerCard({
       const path = `attend/${itemHash}/trigger-${trigger.id}/marker-${Date.now()}${extOf(file.name) || ".patt"}`;
       const url = await uploadToAssets(supabase, path, file, "text/plain");
       setMarkerUrl(url);
+      setMarkerId(null);
     } catch (e: any) {
       setError(`マーカーのアップロードに失敗しました: ${e.message ?? e}`);
     } finally {
@@ -291,6 +324,7 @@ function TriggerCard({
       const mindPath = `attend/${itemHash}/trigger-${trigger.id}/target-${Date.now()}.mind`;
       const mindUrl = await uploadToAssets(supabase, mindPath, blob, "application/octet-stream");
       setMindFileUrl(mindUrl);
+      setMarkerId(null);
     } catch (e: any) {
       setError(`画像のコンパイルに失敗しました: ${e.message ?? e}`);
     } finally {
@@ -328,6 +362,7 @@ function TriggerCard({
         marker_url: displayType === "aframe" ? markerUrl : null,
         target_image_url: displayType === "mindar_image" ? targetImageUrl : null,
         mind_file_url: displayType === "mindar_image" ? mindFileUrl : null,
+        marker_id: displayType === "aframe" || displayType === "mindar_image" ? markerId : null,
         face_anchor_index: displayType === "mindar_face" ? faceAnchorIndex : null,
         gps_lat: displayType === "gps" && gpsLat ? Number(gpsLat) : null,
         gps_lng: displayType === "gps" && gpsLng ? Number(gpsLng) : null,
@@ -421,7 +456,10 @@ function TriggerCard({
                 defaultValue=""
                 onChange={(e) => {
                   const m = aframeMarkers.find((mm) => mm.id === e.target.value);
-                  if (m) setMarkerUrl(m.pattern_file_url);
+                  if (m) {
+                    setMarkerUrl(m.pattern_file_url);
+                    setMarkerId(m.id);
+                  }
                 }}
               >
                 <option value="" disabled>
@@ -494,8 +532,9 @@ function TriggerCard({
                 onChange={(e) => {
                   const m = mindarMarkers.find((mm) => mm.id === e.target.value);
                   if (m) {
-                    setTargetImageUrl(m.target_image_url);
+                    setTargetImageUrl(m.images[0]?.image_url ?? m.target_image_url);
                     setMindFileUrl(m.mind_file_url);
+                    setMarkerId(m.id);
                   }
                 }}
               >
@@ -525,9 +564,28 @@ function TriggerCard({
           />
           {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
           {compileProgress !== null && <p className="text-xs text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>}
-          {targetImageUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={targetImageUrl} alt="target" className="h-20 rounded border" />
+          {selectedMindarMarker && selectedMindarMarker.images.length > 0 ? (
+            <div className="space-y-1">
+              <p className="text-xs text-slate-500">
+                このマーカーには{selectedMindarMarker.images.length}枚の画像が登録されています（同時に認識可能）。
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {selectedMindarMarker.images.map((im) => (
+                  <div key={im.id} className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={im.image_url} alt={im.name || `画像${im.target_index + 1}`} className="h-20 rounded border" />
+                    <span className="absolute bottom-0 right-0 bg-black/70 text-white text-[9px] px-1 rounded-tl">
+                      idx:{im.target_index}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            targetImageUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={targetImageUrl} alt="target" className="h-20 rounded border" />
+            )
           )}
           {mindFileUrl && <p className="text-xs text-emerald-700 break-all">コンパイル済み: {mindFileUrl}</p>}
         </div>
@@ -558,7 +616,7 @@ function TriggerCard({
         </div>
         <div className="space-y-2">
           {trigger.objects.map((o) => (
-            <ObjectRow key={o.id} itemHash={itemHash} object={o} presets={presets} onDeleted={onObjectsChanged} />
+            <ObjectRow key={o.id} itemHash={itemHash} object={o} presets={presets} targetImages={targetImagesForObjects} onDeleted={onObjectsChanged} />
           ))}
           {trigger.objects.length === 0 && <p className="text-xs text-slate-400">まだオブジェクトがありません</p>}
         </div>
@@ -585,7 +643,7 @@ export default function AttendItemEditor({
   project: AttendProject;
   triggers: AttendTriggerWithObjects[];
   presets: PresetObject[];
-  markers: AttendMarker[];
+  markers: AttendMarkerWithImages[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -654,6 +712,21 @@ export default function AttendItemEditor({
         </select>
       </div>
 
+      <section className="bg-pink-50 border border-pink-200 rounded-xl p-4 space-y-2">
+        <h2 className="text-xs font-semibold text-pink-700">クライアント提供URL</h2>
+        <div className="flex items-center gap-2">
+          <code className="text-sm bg-white rounded px-2 py-1 break-all border border-pink-100">{viewerUrl}</code>
+          <button type="button" onClick={handleCopy} className="text-xs px-3 py-1.5 rounded-lg bg-pink-600 text-white hover:bg-pink-700 whitespace-nowrap">
+            {copyOk ? "コピーしました" : "URLをコピー"}
+          </button>
+        </div>
+        {status !== "ready" && (
+          <p className="text-xs text-amber-600">
+            発火条件を1つ以上設定し、それぞれにオブジェクトを配置してから状態を「公開準備完了」に切り替えてください。
+          </p>
+        )}
+      </section>
+
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
         <h2 className="font-semibold">基本情報</h2>
         <label className="space-y-1 block">
@@ -701,18 +774,6 @@ export default function AttendItemEditor({
         )}
       </section>
 
-      <section className="bg-white rounded-xl shadow p-6 space-y-2">
-        <h2 className="font-semibold">クライアント提供URL</h2>
-        <div className="flex items-center gap-2">
-          <code className="text-sm bg-slate-100 rounded px-2 py-1 break-all">{viewerUrl}</code>
-          <button type="button" onClick={handleCopy} className="text-xs px-3 py-1 rounded-lg border hover:bg-slate-50 whitespace-nowrap">
-            {copyOk ? "コピーしました" : "コピー"}
-          </button>
-        </div>
-        <p className="text-xs text-amber-600">
-          発火条件を1つ以上設定し、それぞれにオブジェクトを配置してから状態を「公開準備完了」に切り替えてください。
-        </p>
-      </section>
     </div>
   );
 }

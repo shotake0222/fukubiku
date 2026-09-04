@@ -4,6 +4,8 @@ import AttendItemEditor from "@/components/AttendItemEditor";
 import type {
   AttendItem,
   AttendMarker,
+  AttendMarkerImage,
+  AttendMarkerWithImages,
   AttendProject,
   AttendTrigger,
   AttendTriggerObject,
@@ -64,13 +66,28 @@ export default async function AttendItemPage({ params }: { params: { id: string 
     objects: objectList.filter((o) => o.trigger_id === t.id),
   }));
 
+  const markerList = (markers as AttendMarker[]) ?? [];
+  const markerIds = markerList.map((m) => m.id);
+  const { data: markerImages } = markerIds.length
+    ? await supabase
+        .from("attend_marker_images")
+        .select("*")
+        .in("marker_id", markerIds)
+        .order("target_index", { ascending: true })
+    : { data: [] as AttendMarkerImage[] };
+  const markerImageList = (markerImages as AttendMarkerImage[]) ?? [];
+  const markersWithImages: AttendMarkerWithImages[] = markerList.map((m) => ({
+    ...m,
+    images: markerImageList.filter((im) => im.marker_id === m.id),
+  }));
+
   return (
     <AttendItemEditor
       item={i}
       project={project as AttendProject}
       triggers={triggersWithObjects}
       presets={(presets as PresetObject[]) ?? []}
-      markers={(markers as AttendMarker[]) ?? []}
+      markers={markersWithImages}
     />
   );
 }
