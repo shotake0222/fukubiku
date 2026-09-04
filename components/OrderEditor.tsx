@@ -95,7 +95,7 @@ export default function OrderEditor({
   const presetsInCategory = presets.filter((p) => (p.category || UNCATEGORIZED) === selectedCategory);
 
   const siteOrigin =
-    process.env.NEXT_PUBLIC_SITE_URL || "https://fukubikiu.attend-ar.com";
+    process.env.NEXT_PUBLIC_SITE_URL || "https://app.fukubikiu.com";
   const viewerUrl = `${siteOrigin}/v/${order.hash}`;
 
   async function uploadToAssets(path: string, file: File | Blob, contentType?: string) {

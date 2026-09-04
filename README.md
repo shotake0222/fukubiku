@@ -1,6 +1,6 @@
 # fukubiku 管理ツール
 
-fukubikiu.attend-ar.com のクライアント提供AR体験を管理するための管理画面です。
+app.fukubikiu.com のクライアント提供AR体験を管理するための管理画面です。
 
 - 注文情報の管理（クライアント名・注文日・納期・担当者・個数・延長確認日）
 - 表示オブジェクト（3Dモデル）の選択、またはアップロード
@@ -34,7 +34,7 @@ fukubikiu.attend-ar.com のクライアント提供AR体験を管理するため
 NEXT_PUBLIC_SUPABASE_URL=...
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
-NEXT_PUBLIC_SITE_URL=https://fukubikiu.attend-ar.com
+NEXT_PUBLIC_SITE_URL=https://app.fukubikiu.com
 ```
 
 Vercelプロジェクト（fukubiku）の Settings → Environment Variables にも同じ値を登録してください。
@@ -64,5 +64,5 @@ git push origin main
 2. 遷移先の注文編集画面で「表示方式」（A-Frame / MindAR）を選択
 3. 「表示オブジェクト」をプリセットから選ぶか、独自の3Dモデル(.glb)をアップロード
 4. MindARを選んだ場合は、クライアント提供の画像をアップロード → 自動でコンパイルされ `.mind` ファイルが生成される
-5. 「保存」を押すと、必要な情報が揃っていれば状態が「公開準備完了」になり、ページ下部にクライアント提供URL（`https://fukubikiu.attend-ar.com/v/xxxxxxxxxx`）が表示される
+5. 「保存」を押すと、必要な情報が揃っていれば状態が「公開準備完了」になり、ページ下部にクライアント提供URL（`https://app.fukubikiu.com/v/xxxxxxxxxx`）が表示される
 6. そのURLをクライアントに共有すればAR体験を閲覧可能

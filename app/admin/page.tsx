@@ -23,7 +23,7 @@ export default async function AdminOrdersPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
-  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://fukubikiu.attend-ar.com";
+  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://app.fukubikiu.com";
 
   return (
     <div className="space-y-6">
