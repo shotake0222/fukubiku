@@ -93,7 +93,7 @@ export default function AttendExperienceEditor({
   );
   const presetsInCategory = presets.filter((p) => (p.category || UNCATEGORIZED) === selectedCategory);
 
-  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://app.fukubikiu.com";
+  const siteOrigin = process.env.NEXT_PUBLIC_ATTEND_SITE_URL || "https://app.attend-ar.com";
   const viewerUrl = `${siteOrigin}/a/${experience.hash}`;
 
   async function uploadToAssets(path: string, file: File | Blob, contentType?: string) {

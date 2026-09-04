@@ -49,7 +49,7 @@ export default function AttendProjectEditor({
   const [addingExperience, setAddingExperience] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://app.fukubikiu.com";
+  const siteOrigin = process.env.NEXT_PUBLIC_ATTEND_SITE_URL || "https://app.attend-ar.com";
 
   const nfcTotal = form.nfc_tag_total ? Number(form.nfc_tag_total) : null;
   const nfcUsedNum = Number(nfcUsed) || 0;
