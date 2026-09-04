@@ -21,16 +21,26 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
   const o = order as Order;
 
   let modelUrl: string | null = o.custom_model_url;
+  let category: string | null = null;
   if (o.object_source === "preset" && o.preset_object_id) {
     const { data: preset } = await supabase
       .from("preset_objects")
       .select("*")
       .eq("id", o.preset_object_id)
       .single();
-    modelUrl = (preset as PresetObject | null)?.model_url ?? null;
+    const p = preset as PresetObject | null;
+    modelUrl = p?.model_url ?? null;
+    // 焦らし演出(結果が出るまでのプレースホルダー)をカテゴリ専用のものにするために使う。
+    // カスタムアップロードのオブジェクト(fukubikuの固定6カテゴリに属さない)ではnullのまま。
+    category = p?.category ?? null;
   }
 
   return (
-    <ARViewer displayType={o.display_type} modelUrl={modelUrl} mindFileUrl={o.mind_file_url} />
+    <ARViewer
+      displayType={o.display_type}
+      modelUrl={modelUrl}
+      mindFileUrl={o.mind_file_url}
+      category={category}
+    />
   );
 }

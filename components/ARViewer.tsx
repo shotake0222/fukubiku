@@ -8,8 +8,10 @@ import {
   AFRAME_SRC,
   ARJS_SRC,
   MINDAR_IMAGE_AFRAME_SRC,
+  CategorySuspenseEntity,
   ObjectEntity,
   SuspenseEntity,
+  isCategorySuspenseAvailable,
   registerAlphaVideoComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
@@ -25,11 +27,15 @@ export default function ARViewer({
   modelUrl,
   mindFileUrl,
   markerUrl,
+  category,
 }: {
   displayType: DisplayType;
   modelUrl: string | null;
   mindFileUrl: string | null;
   markerUrl?: string | null;
+  /** fukubikuの固定6カテゴリ(あみだ/ボックス/おみくじ/ダーツ/ガラガラ/スクラッチ)。
+   * 焦らし演出をカテゴリ専用のものにするために使う。カスタムアップロード等ではnull。 */
+  category?: string | null;
 }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false); // arjs or mindar
@@ -120,7 +126,10 @@ export default function ARViewer({
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0" ref={targetElRef}>
             <ObjectEntity url={modelUrl} visible={revealed} />
-            {!revealed && <SuspenseEntity />}
+            {!revealed && isCategorySuspenseAvailable(category) && (
+              <CategorySuspenseEntity category={category} />
+            )}
+            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity />}
           </a-entity>
         </a-scene>
       )}
@@ -134,7 +143,10 @@ export default function ARViewer({
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
             <ObjectEntity url={modelUrl} visible={revealed} />
-            {!revealed && <SuspenseEntity />}
+            {!revealed && isCategorySuspenseAvailable(category) && (
+              <CategorySuspenseEntity category={category} />
+            )}
+            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity />}
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>

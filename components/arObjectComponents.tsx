@@ -213,8 +213,33 @@ export function ObjectEntity({
   );
 }
 
-// 結果発表前の「焦らし」演出プレースホルダー。中身が分からないガチャカプセルを模したオブジェクトで、
-// ObjectEntityと同じposition/scaleの既定値を使うことで、結果発表時に違和感なく差し替わるようにしている。
+// fukubikuの固定6カテゴリ。焦らし演出をカテゴリ専用にする際、この値以外(カスタムアップロード等)は
+// 汎用のガチャカプセル演出にフォールバックする。
+const CATEGORY_SUSPENSE_SLUGS = ["amida", "box", "darts", "garagara", "omikuji", "scratch"];
+
+// カテゴリ専用の「焦らし」演出。そのカテゴリの実物(あみだくじの盤/抽選箱/鳥居とおみくじ/
+// ダーツの的/福引きドラム/スクラッチカード)が結果バッジ無しでアニメーションしているだけの
+// .glbを表示する(公開テンプレートと同じpublic/presets/<category>/配下から配信)。
+export function CategorySuspenseEntity({
+  category,
+  position = "0 0.6 0",
+  scale,
+}: {
+  category: string;
+  position?: string;
+  scale?: string | null;
+}) {
+  const url = `/presets/${category}/${category}_suspense_3d.glb`;
+  return <ObjectEntity url={url} position={position} scale={scale} />;
+}
+
+export function isCategorySuspenseAvailable(category: string | null | undefined): category is string {
+  return !!category && CATEGORY_SUSPENSE_SLUGS.includes(category);
+}
+
+// 結果発表前の「焦らし」演出プレースホルダー(汎用フォールバック版)。中身が分からないガチャカプセルを
+// 模したオブジェクトで、ObjectEntityと同じposition/scaleの既定値を使うことで、結果発表時に
+// 違和感なく差し替わるようにしている。カテゴリが判定できない(カスタムアップロード)場合に使う。
 export function SuspenseEntity({
   position = "0 0.6 0",
   scale,
