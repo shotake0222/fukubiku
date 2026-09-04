@@ -5,6 +5,7 @@
 // - registerGifImageComponent: GIF/静止画をcanvasテクスチャとして再生するA-Frameコンポーネント
 // - registerAlphaVideoComponent: 透過MP4(左半分RGB/右半分アルファ)を再生するA-Frameコンポーネント
 // - ObjectEntity: 上記を踏まえてURLに応じた<a-entity>を出し分ける共通コンポーネント
+//   (.glbの場合はanimation-mixer(aframe-extras)で埋め込みアニメーションを自動再生する)
 
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
@@ -12,6 +13,10 @@ export const MINDAR_IMAGE_AFRAME_SRC =
   "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js";
 export const MINDAR_FACE_AFRAME_SRC =
   "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js";
+// .glbに埋め込まれたアニメーション(回転・拡縮・上下移動などのキーフレーム)を再生するために必要。
+// gltf-model単体では埋め込みアニメーションは自動再生されないため、この拡張コンポーネントを読み込む。
+export const AFRAME_EXTRAS_SRC =
+  "https://cdn.jsdelivr.net/npm/aframe-extras@7/dist/aframe-extras.animation-mixer.min.js";
 
 export function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
@@ -186,6 +191,9 @@ export function ObjectEntity({
       position={position === "0 0.6 0" ? "0 0 0" : position}
       scale={scale || "0.05 0.05 0.05"}
       rotation={rotationY ? rotation : undefined}
+      // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
+      // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
+      animation-mixer="loop: repeat"
       animation={
         rotationY
           ? undefined

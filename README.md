@@ -125,6 +125,16 @@ git push origin main
 再実行しても壊れませんが、同名レコードが重複登録されるため、再登録したい場合は該当行を
 `delete from preset_objects where name like '%（3Dオブジェクト）';`などで削除してから実行してください。
 
+**3Dオブジェクトのアイドルアニメーション**: いずれの`.glb`にも、待機中にループ再生される
+キーフレームアニメーションを埋め込んでいます（当たり系の賞グレードは「回転しながら弾む」演出、
+はずれは「ゆっくり回転するのみ」、参加賞のギフトボックスは「上下にふわっと浮遊＋左右に揺れる」演出）。
+既存の透過MP4テンプレートの持つ「当たりは派手に、はずれは控えめに」という演出方向に合わせています。
+再生には[aframe-extras](https://github.com/n5ro/aframe-extras)の`animation-mixer`コンポーネントを
+使用しており（`components/arObjectComponents.tsx`の`AFRAME_EXTRAS_SRC`、`ObjectEntity`の
+`animation-mixer="loop: repeat"`）、`ARViewer.tsx`/`AttendARViewer.tsx`は起動時にこのスクリプトを
+読み込んでから3Dシーンを表示します。アニメーションを含まない（従来からある）静的な`.glb`に対しては
+`animation-mixer`は何もしないため、既存のプリセットへの影響はありません。
+
 ### 7. マーカー管理（あてんど）
 `/admin/attend/markers` から、A-Frame(AR.js)のマーカーとMindARのイメージトラッキング用
 画像を、案件（クライアント・企業）ごとに登録して一覧管理できます。

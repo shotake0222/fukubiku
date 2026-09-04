@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import type { AttendDisplayType } from "@/lib/types";
 import {
+  AFRAME_EXTRAS_SRC,
   AFRAME_SRC,
   ARJS_SRC,
   MINDAR_FACE_AFRAME_SRC,
@@ -62,6 +63,7 @@ function isTriggerUsable(t: ResolvedTrigger): boolean {
 function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false);
+  const [extrasLoaded, setExtrasLoaded] = useState(false); // aframe-extras (animation-mixer)
   const registeredRef = useRef(false);
 
   useEffect(() => {
@@ -73,7 +75,7 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
     }
   }, [aframeLoaded]);
 
-  const ready = aframeLoaded && engineLoaded;
+  const ready = aframeLoaded && engineLoaded && extrasLoaded;
   const marker = trigger.markerUrl || DEFAULT_MARKER_URL;
   const anchorIndex = trigger.faceAnchorIndex ?? 10;
   const engineSrc = engineSrcFor(trigger.displayType);
@@ -81,6 +83,11 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   return (
     <div className="h-full w-full bg-black relative">
       <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
+      <Script
+        src={AFRAME_EXTRAS_SRC}
+        strategy="afterInteractive"
+        onLoad={() => setExtrasLoaded(true)}
+      />
       {engineSrc && (
         <Script src={engineSrc} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
       )}

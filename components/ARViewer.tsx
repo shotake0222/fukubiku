@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Script from "next/script";
 import type { DisplayType } from "@/lib/types";
 import {
+  AFRAME_EXTRAS_SRC,
   AFRAME_SRC,
   ARJS_SRC,
   MINDAR_IMAGE_AFRAME_SRC,
@@ -27,6 +28,7 @@ export default function ARViewer({
 }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false); // arjs or mindar
+  const [extrasLoaded, setExtrasLoaded] = useState(false); // aframe-extras (animation-mixer)
   const registeredRef = useRef(false);
 
   useEffect(() => {
@@ -38,7 +40,7 @@ export default function ARViewer({
     }
   }, [aframeLoaded]);
 
-  const ready = aframeLoaded && engineLoaded;
+  const ready = aframeLoaded && engineLoaded && extrasLoaded;
   const marker = markerUrl || DEFAULT_MARKER_URL;
 
   if (!modelUrl || (displayType === "mindar" && !mindFileUrl)) {
@@ -52,6 +54,11 @@ export default function ARViewer({
   return (
     <div className="h-screen w-screen bg-black relative">
       <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
+      <Script
+        src={AFRAME_EXTRAS_SRC}
+        strategy="afterInteractive"
+        onLoad={() => setExtrasLoaded(true)}
+      />
       {displayType === "aframe" && (
         <Script src={ARJS_SRC} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
       )}
