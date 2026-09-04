@@ -13,10 +13,29 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
 
 export type ServiceTag = "fukubiku" | "attend";
 
+// あてんどのオブジェクトは「個別案件(特定クライアント向けの単発カスタム施策)」と
+// 「サービスメニュー(複数クライアントへ横展開する定型施策)」で管理を分けたいという要望に対応。
+// fukubiku側では使用しない(null)。
+export type AttendPresetGroup = "project" | "menu";
+
+export const ATTEND_PRESET_GROUPS: { value: AttendPresetGroup; label: string; hint: string }[] = [
+  {
+    value: "project",
+    label: "個別案件",
+    hint: "特定クライアント向けの単発カスタム施策（例: このクライアント専用のアクリルスタンド）",
+  },
+  {
+    value: "menu",
+    label: "サービスメニュー",
+    hint: "複数クライアントへ横展開する定型サービス施策（例: アクリルスタンド→XR表示 のパッケージ）",
+  },
+];
+
 export interface PresetObject {
   id: string;
   name: string;
   category: string | null;
+  group_type: AttendPresetGroup | null;
   model_url: string;
   thumbnail_url: string | null;
   service: ServiceTag | null;

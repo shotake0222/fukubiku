@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import PresetManager from "@/components/PresetManager";
-import type { PresetObject } from "@/lib/types";
+import { ATTEND_PRESET_GROUPS, type PresetObject } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,11 @@ export default async function AttendPresetsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <PresetManager initialPresets={(presets as PresetObject[]) ?? []} service="attend" serviceLabel="あてんど" />
+    <PresetManager
+      initialPresets={(presets as PresetObject[]) ?? []}
+      service="attend"
+      serviceLabel="あてんど"
+      groups={ATTEND_PRESET_GROUPS}
+    />
   );
 }

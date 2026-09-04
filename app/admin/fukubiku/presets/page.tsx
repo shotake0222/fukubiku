@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import PresetManager from "@/components/PresetManager";
-import type { PresetObject } from "@/lib/types";
+import { PRESET_CATEGORIES, type PresetObject } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +13,11 @@ export default async function FukubikuPresetsPage() {
     .order("created_at", { ascending: false });
 
   return (
-    <PresetManager initialPresets={(presets as PresetObject[]) ?? []} service="fukubiku" serviceLabel="fukubiku" />
+    <PresetManager
+      initialPresets={(presets as PresetObject[]) ?? []}
+      service="fukubiku"
+      serviceLabel="fukubiku"
+      fixedCategories={PRESET_CATEGORIES}
+    />
   );
 }

@@ -14,6 +14,11 @@ alter table preset_objects add column if not exists service text; -- 'fukubiku' 
 -- fukubikuに寄せておく（あてんど側の画面に紛れ込まないようにするため）
 update preset_objects set service = 'fukubiku' where service is null;
 
+-- あてんど用: 「個別案件(特定クライアント向け単発カスタム)」と
+-- 「サービスメニュー(複数クライアントへ横展開する定型施策)」を分けて管理するための列。
+-- fukubiku側では使用しない(null のまま)。
+alter table preset_objects add column if not exists group_type text check (group_type in ('project', 'menu'));
+
 -- 案件（クライアント単位）
 create table if not exists attend_projects (
   id uuid primary key default gen_random_uuid(),
