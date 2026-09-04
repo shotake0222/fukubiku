@@ -7,12 +7,40 @@ import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget } from "@/lib/mindCompiler";
 import OrderDetailsForm, { type OrderDetailsValue } from "@/components/OrderDetailsForm";
 import type { DisplayType, ObjectSource, Order, PresetObject } from "@/lib/types";
+import { PRESET_CATEGORIES } from "@/lib/types";
 
 const ASSET_BUCKET = "assets";
+const UNCATEGORIZED = "__uncategorized__";
 
 function extOf(name: string) {
   const m = name.match(/\.[a-zA-Z0-9]+$/);
   return m ? m[0] : "";
+}
+
+function categoryLabel(value: string) {
+  if (value === UNCATEGORIZED) return "未分類";
+  const found = PRESET_CATEGORIES.find((c) => c.value === value);
+  return found ? found.label : value;
+}
+
+function PresetPreview({ url }: { url: string }) {
+  if (/\.mp4(\?|$)/i.test(url)) {
+    return (
+      <video
+        src={url}
+        className="w-full h-20 object-cover rounded bg-slate-100"
+        autoPlay
+        muted
+        loop
+        playsInline
+      />
+    );
+  }
+  if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={url} alt="" className="w-full h-20 object-cover rounded" />;
+  }
+  return <div className="w-full h-20 bg-slate-100 rounded" />;
 }
 
 export default function OrderEditor({
@@ -50,6 +78,22 @@ export default function OrderEditor({
   const [error, setError] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
 
+  const categoriesInUse = useMemo(() => {
+    const set = new Set(presets.map((p) => p.category || UNCATEGORIZED));
+    const ordered = [
+      ...PRESET_CATEGORIES.map((c) => c.value).filter((v) => set.has(v)),
+      ...Array.from(set).filter((v) => !PRESET_CATEGORIES.some((c) => c.value === v)),
+    ];
+    return ordered;
+  }, [presets]);
+
+  const selectedPreset = presets.find((p) => p.id === presetObjectId) || null;
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    selectedPreset?.category || categoriesInUse[0] || UNCATEGORIZED
+  );
+
+  const presetsInCategory = presets.filter((p) => (p.category || UNCATEGORIZED) === selectedCategory);
+
   const siteOrigin =
     process.env.NEXT_PUBLIC_SITE_URL || "https://fukubikiu.attend-ar.com";
   const viewerUrl = `${siteOrigin}/v/${order.hash}`;
@@ -71,7 +115,7 @@ export default function OrderEditor({
       const url = await uploadToAssets(path, file);
       setCustomModelUrl(url);
     } catch (e: any) {
-      setError(`モデルのアップロードに失敗しました: ${e.message ?? e}`);
+      setError(`アップロードに失敗しました: ${e.message ?? e}`);
     } finally {
       setModelUploading(false);
     }
@@ -175,14 +219,14 @@ export default function OrderEditor({
                 checked={displayType === t}
                 onChange={() => setDisplayType(t)}
               />
-              {t === "aframe" ? "A-Frame（マーカーなし3D表示）" : "MindAR（画像トラッキングAR）"}
+              {t === "aframe" ? "A-Frame（マーカー画像でAR表示）" : "MindAR（画像トラッキングAR）"}
             </label>
           ))}
         </div>
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <h2 className="font-semibold">表示オブジェクト（3Dモデル）</h2>
+        <h2 className="font-semibold">表示オブジェクト</h2>
         <div className="flex gap-4">
           {(["preset", "upload"] as ObjectSource[]).map((s) => (
             <label key={s} className="flex items-center gap-2 text-sm">
@@ -192,50 +236,67 @@ export default function OrderEditor({
                 checked={objectSource === s}
                 onChange={() => setObjectSource(s)}
               />
-              {s === "preset" ? "用意されたテンプレートから選択" : "独自の画像/GIF/3Dモデルをアップロード"}
+              {s === "preset" ? "用意されたテンプレートから選択" : "独自の動画/GIF/画像/3Dモデルをアップロード"}
             </label>
           ))}
         </div>
 
         {objectSource === "preset" ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {presets.map((p) => (
-              <button
-                type="button"
-                key={p.id}
-                onClick={() => setPresetObjectId(p.id)}
-                className={`border rounded-lg p-2 text-xs text-left space-y-2 ${
-                  presetObjectId === p.id ? "ring-2 ring-slate-900 border-slate-900" : ""
-                }`}
-              >
-                {p.thumbnail_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={p.thumbnail_url} alt={p.name} className="w-full h-20 object-cover rounded" />
-                ) : (
-                  <div className="w-full h-20 bg-slate-100 rounded" />
-                )}
-                <div className="truncate">{p.name}</div>
-              </button>
-            ))}
-            {presets.length === 0 && (
-              <p className="col-span-full text-sm text-slate-400">
-                プリセットオブジェクトがありません。「オブジェクト管理」から登録してください。
-              </p>
-            )}
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {categoriesInUse.map((cat) => (
+                <button
+                  type="button"
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`text-xs px-3 py-1 rounded-full border ${
+                    selectedCategory === cat
+                      ? "bg-slate-900 text-white border-slate-900"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  {categoryLabel(cat)}
+                </button>
+              ))}
+              {categoriesInUse.length === 0 && (
+                <p className="text-sm text-slate-400">
+                  テンプレートがありません。「オブジェクト管理」から登録してください。
+                </p>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {presetsInCategory.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  onClick={() => setPresetObjectId(p.id)}
+                  className={`border rounded-lg p-2 text-xs text-left space-y-2 ${
+                    presetObjectId === p.id ? "ring-2 ring-slate-900 border-slate-900" : ""
+                  }`}
+                >
+                  <PresetPreview url={p.thumbnail_url || p.model_url} />
+                  <div className="truncate">{p.name}</div>
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           <div className="space-y-2">
             <input
               type="file"
-              accept=".glb,.gltf,image/gif,image/*"
+              accept=".glb,.gltf,video/mp4,image/gif,image/*"
               onChange={(e) => e.target.files?.[0] && handleModelUpload(e.target.files[0])}
             />
             <p className="text-xs text-slate-400">
-              GIF/画像、または.glb形式の3Dモデルをアップロードできます。
+              動画(.mp4)、GIF/画像、または.glb形式の3Dモデルをアップロードできます。
             </p>
             {modelUploading && <p className="text-sm text-slate-500">アップロード中...</p>}
             {customModelUrl && (
-              <p className="text-xs text-emerald-700 break-all">アップロード済み: {customModelUrl}</p>
+              <div className="space-y-1">
+                <PresetPreview url={customModelUrl} />
+                <p className="text-xs text-emerald-700 break-all">アップロード済み: {customModelUrl}</p>
+              </div>
             )}
           </div>
         )}

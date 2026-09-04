@@ -10,21 +10,20 @@ const MINDAR_AFRAME_SRC =
   "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js";
 const DEFAULT_MARKER_URL = "/markers/patternkuji.patt";
 
-function isAnimatedImage(url: string) {
-  return /\.(gif|png|jpe?g|webp)(\?|$)/i.test(url);
+function assetKind(url: string): "video" | "image" | "model" {
+  if (/\.mp4(\?|$)/i.test(url)) return "video";
+  if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
+  return "model";
 }
 
-// GIF(アニメーション画像含む)を A-Frame 上でテクスチャとして再生するコンポーネント。
-// DOM上で通常再生されているGIFの現在フレームを毎フレームcanvasへ描画し、
-// そのcanvasをWebGLテクスチャとして使い続けることでアニメーションを実現する。
-function registerGifImageComponent() {
-  const w = window as any;
-  if (!w.AFRAME || w.AFRAME.components["gif-image"]) return;
-
-  w.AFRAME.registerComponent("gif-image", {
+// GIF/静止画をA-Frame上でテクスチャとして再生するコンポーネント(旧式のアップロード互換用)。
+// DOM上で再生中の<img>の現在フレームを毎フレームcanvasへ描画し、そのcanvasをテクスチャとして使う。
+function registerGifImageComponent(AFRAME: any) {
+  if (AFRAME.components["gif-image"]) return;
+  AFRAME.registerComponent("gif-image", {
     schema: { src: { type: "string" } },
     init() {
-      const THREE = w.AFRAME.THREE;
+      const THREE = AFRAME.THREE;
       this.img = document.createElement("img");
       this.img.crossOrigin = "anonymous";
       this.canvas = document.createElement("canvas");
@@ -33,7 +32,6 @@ function registerGifImageComponent() {
       this.ctx = this.canvas.getContext("2d");
       this.texture = new THREE.CanvasTexture(this.canvas);
       this.mesh = null;
-
       this.img.onload = () => {
         const w0 = this.img.naturalWidth || 1;
         const h0 = this.img.naturalHeight || 1;
@@ -44,17 +42,11 @@ function registerGifImageComponent() {
           transparent: true,
           side: THREE.DoubleSide,
         });
-        const aspect = h0 / w0;
-        const geometry = new THREE.PlaneGeometry(1, aspect);
+        const geometry = new THREE.PlaneGeometry(1, h0 / w0);
         this.mesh = new THREE.Mesh(geometry, material);
         this.el.setObject3D("gif-mesh", this.mesh);
       };
       this.img.src = this.data.src;
-    },
-    update(oldData: any) {
-      if (this.img && this.data.src !== oldData.src) {
-        this.img.src = this.data.src;
-      }
     },
     tick() {
       if (this.ctx && this.img.complete && this.img.naturalWidth) {
@@ -62,7 +54,7 @@ function registerGifImageComponent() {
           this.ctx.drawImage(this.img, 0, 0, this.canvas.width, this.canvas.height);
           this.texture.needsUpdate = true;
         } catch {
-          // 読み込み中は無視
+          /* 読み込み中は無視 */
         }
       }
     },
@@ -72,8 +64,92 @@ function registerGifImageComponent() {
   });
 }
 
+// 透過MP4(左半分=RGB, 右半分=アルファのグレースケール)を再生するコンポーネント。
+// GIF由来のアニメーションをffmpegで変換したファイルを想定している。
+function registerAlphaVideoComponent(AFRAME: any) {
+  if (AFRAME.components["alpha-video"]) return;
+  AFRAME.registerComponent("alpha-video", {
+    schema: { src: { type: "string" } },
+    init() {
+      const THREE = AFRAME.THREE;
+      const video = document.createElement("video");
+      video.src = this.data.src;
+      video.crossOrigin = "anonymous";
+      video.loop = true;
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute("webkit-playsinline", "true");
+      video.setAttribute("playsinline", "true");
+      this.video = video;
+
+      const tryPlay = () => video.play().catch(() => {});
+      tryPlay();
+      const resumeOnGesture = () => {
+        tryPlay();
+      };
+      document.addEventListener("touchend", resumeOnGesture, { once: true });
+      document.addEventListener("click", resumeOnGesture, { once: true });
+      this._resumeOnGesture = resumeOnGesture;
+
+      const texture = new THREE.VideoTexture(video);
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+
+      const material = new THREE.ShaderMaterial({
+        uniforms: { map: { value: texture } },
+        transparent: true,
+        side: THREE.DoubleSide,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D map;
+          varying vec2 vUv;
+          void main() {
+            vec2 colorUv = vec2(vUv.x * 0.5, vUv.y);
+            vec2 alphaUv = vec2(vUv.x * 0.5 + 0.5, vUv.y);
+            vec3 color = texture2D(map, colorUv).rgb;
+            float alpha = texture2D(map, alphaUv).r;
+            if (alpha < 0.02) discard;
+            gl_FragColor = vec4(color, alpha);
+          }
+        `,
+      });
+
+      const geometry = new THREE.PlaneGeometry(1, 1);
+      this.mesh = new THREE.Mesh(geometry, material);
+      this.el.setObject3D("alpha-video-mesh", this.mesh);
+
+      video.addEventListener("loadedmetadata", () => {
+        const w = video.videoWidth / 2 || 1;
+        const h = video.videoHeight || 1;
+        this.mesh.scale.set(1, h / w, 1);
+      });
+    },
+    remove() {
+      if (this.mesh) this.el.removeObject3D("alpha-video-mesh");
+      if (this.video) {
+        this.video.pause();
+        this.video.src = "";
+      }
+      if (this._resumeOnGesture) {
+        document.removeEventListener("touchend", this._resumeOnGesture);
+        document.removeEventListener("click", this._resumeOnGesture);
+      }
+    },
+  });
+}
+
 function ObjectEntity({ url }: { url: string }) {
-  if (isAnimatedImage(url)) {
+  const kind = assetKind(url);
+  if (kind === "video") {
+    return <a-entity alpha-video={`src: ${url}`} position="0 0.6 0"></a-entity>;
+  }
+  if (kind === "image") {
     return <a-entity gif-image={`src: ${url}`} position="0 0.6 0"></a-entity>;
   }
   return (
@@ -102,8 +178,10 @@ export default function ARViewer({
   const registeredRef = useRef(false);
 
   useEffect(() => {
-    if (aframeLoaded && !registeredRef.current) {
-      registerGifImageComponent();
+    const AFRAME = (window as any).AFRAME;
+    if (aframeLoaded && AFRAME && !registeredRef.current) {
+      registerGifImageComponent(AFRAME);
+      registerAlphaVideoComponent(AFRAME);
       registeredRef.current = true;
     }
   }, [aframeLoaded]);

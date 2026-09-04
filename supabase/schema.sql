@@ -7,10 +7,14 @@ create extension if not exists pgcrypto;
 create table if not exists preset_objects (
   id uuid primary key default gen_random_uuid(),
   name text not null,
-  model_url text not null,      -- glb/gltf の公開URL
+  category text,                -- amida | box | darts | garagara | omikuji | scratch | 任意の文字列
+  model_url text not null,      -- glb/gltf/gif/mp4 などアセットの公開URL
   thumbnail_url text,
   created_at timestamptz not null default now()
 );
+
+-- 既存環境向け: 既にテーブルが存在していた場合にcategory列を追加する
+alter table preset_objects add column if not exists category text;
 
 -- 注文
 create table if not exists orders (
