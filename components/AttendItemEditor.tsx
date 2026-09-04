@@ -9,6 +9,7 @@ import type {
   AttendDisplayType,
   AttendExperienceStatus,
   AttendItem,
+  AttendMarker,
   AttendProject,
   AttendTriggerObject,
   AttendTriggerWithObjects,
@@ -229,12 +230,14 @@ function TriggerCard({
   itemHash,
   trigger,
   presets,
+  markers,
   onDeleted,
   onObjectsChanged,
 }: {
   itemHash: string;
   trigger: AttendTriggerWithObjects;
   presets: PresetObject[];
+  markers: AttendMarker[];
   onDeleted: () => void;
   onObjectsChanged: () => void;
 }) {
@@ -248,6 +251,9 @@ function TriggerCard({
   const [gpsLat, setGpsLat] = useState(trigger.gps_lat != null ? String(trigger.gps_lat) : "");
   const [gpsLng, setGpsLng] = useState(trigger.gps_lng != null ? String(trigger.gps_lng) : "");
   const [gpsRadius, setGpsRadius] = useState(String(trigger.gps_radius_m ?? 20));
+
+  const aframeMarkers = markers.filter((m) => m.type === "aframe");
+  const mindarMarkers = markers.filter((m) => m.type === "mindar_image");
 
   const [markerUploading, setMarkerUploading] = useState(false);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
@@ -405,8 +411,37 @@ function TriggerCard({
       </div>
 
       {displayType === "aframe" && (
-        <div className="space-y-1 text-sm">
-          <p className="text-xs text-slate-500">未指定の場合は共通の既定マーカーが使われます。専用マーカーはAR.js形式の.pattファイル。</p>
+        <div className="space-y-2 text-sm">
+          <p className="text-xs text-slate-500">未指定の場合は共通の既定マーカーが使われます。</p>
+          {aframeMarkers.length > 0 && (
+            <label className="space-y-1 block">
+              <span className="text-xs font-medium text-slate-600">この案件に登録済みのマーカーから選択</span>
+              <select
+                className="input text-xs"
+                defaultValue=""
+                onChange={(e) => {
+                  const m = aframeMarkers.find((mm) => mm.id === e.target.value);
+                  if (m) setMarkerUrl(m.pattern_file_url);
+                }}
+              >
+                <option value="" disabled>
+                  選択してください（{aframeMarkers.length}件登録済み）
+                </option>
+                {aframeMarkers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="text-xs text-slate-400">
+            または新しく.pattファイルをアップロード（
+            <a href="/admin/attend/markers" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+              マーカー管理
+            </a>
+            に登録してこの案件で使い回すこともできます）
+          </p>
           <input
             type="file"
             accept=".patt"
@@ -450,7 +485,38 @@ function TriggerCard({
 
       {displayType === "mindar_image" && (
         <div className="space-y-2 text-sm">
-          <p className="text-xs text-slate-500">画像をアップロードすると自動で.mindファイルにコンパイルされます。</p>
+          {mindarMarkers.length > 0 && (
+            <label className="space-y-1 block">
+              <span className="text-xs font-medium text-slate-600">この案件に登録済みのターゲット画像から選択</span>
+              <select
+                className="input text-xs"
+                defaultValue=""
+                onChange={(e) => {
+                  const m = mindarMarkers.find((mm) => mm.id === e.target.value);
+                  if (m) {
+                    setTargetImageUrl(m.target_image_url);
+                    setMindFileUrl(m.mind_file_url);
+                  }
+                }}
+              >
+                <option value="" disabled>
+                  選択してください（{mindarMarkers.length}件登録済み）
+                </option>
+                {mindarMarkers.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <p className="text-xs text-slate-400">
+            または新しく画像をアップロード（自動で.mindファイルにコンパイルされます。
+            <a href="/admin/attend/markers" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+              マーカー管理
+            </a>
+            に登録してこの案件で使い回すこともできます）
+          </p>
           <input
             type="file"
             accept="image/*"
@@ -513,11 +579,13 @@ export default function AttendItemEditor({
   project,
   triggers,
   presets,
+  markers,
 }: {
   item: AttendItem;
   project: AttendProject;
   triggers: AttendTriggerWithObjects[];
   presets: PresetObject[];
+  markers: AttendMarker[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -623,6 +691,7 @@ export default function AttendItemEditor({
             itemHash={item.hash}
             trigger={t}
             presets={presets}
+            markers={markers}
             onDeleted={() => router.refresh()}
             onObjectsChanged={() => router.refresh()}
           />

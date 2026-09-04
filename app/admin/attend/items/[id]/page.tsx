@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import AttendItemEditor from "@/components/AttendItemEditor";
 import type {
   AttendItem,
+  AttendMarker,
   AttendProject,
   AttendTrigger,
   AttendTriggerObject,
@@ -27,7 +28,7 @@ export default async function AttendItemPage({ params }: { params: { id: string 
 
   const i = item as AttendItem;
 
-  const [{ data: project }, { data: presets }, { data: triggers }] = await Promise.all([
+  const [{ data: project }, { data: presets }, { data: triggers }, { data: markers }] = await Promise.all([
     supabase.from("attend_projects").select("*").eq("id", i.project_id).single(),
     supabase
       .from("preset_objects")
@@ -39,6 +40,11 @@ export default async function AttendItemPage({ params }: { params: { id: string 
       .select("*")
       .eq("item_id", i.id)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("attend_markers")
+      .select("*")
+      .eq("project_id", i.project_id)
+      .order("created_at", { ascending: false }),
   ]);
 
   const triggerList = (triggers as AttendTrigger[]) ?? [];
@@ -64,6 +70,7 @@ export default async function AttendItemPage({ params }: { params: { id: string 
       project={project as AttendProject}
       triggers={triggersWithObjects}
       presets={(presets as PresetObject[]) ?? []}
+      markers={(markers as AttendMarker[]) ?? []}
     />
   );
 }

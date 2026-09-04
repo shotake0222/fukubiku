@@ -185,3 +185,34 @@ create policy "authenticated read attend_trigger_objects" on attend_trigger_obje
 drop policy if exists "authenticated write attend_trigger_objects" on attend_trigger_objects;
 create policy "authenticated write attend_trigger_objects" on attend_trigger_objects
   for all to authenticated using (true) with check (true);
+
+-- マーカー管理（案件・企業ごとにAR.jsマーカー / MindARターゲット画像をまとめて管理するライブラリ）
+create table if not exists attend_markers (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references attend_projects(id) on delete cascade,
+  type text not null check (type in ('aframe', 'mindar_image')),
+  name text not null,
+  preview_image_url text,  -- 見た目確認用の画像（aframeなら印刷用マーカー画像、mindar_imageなら元画像と同じでも可）
+  pattern_file_url text,   -- aframe用 .patt（AR.jsのマーカートレーニングツールで生成したものをアップロード）
+  target_image_url text,   -- mindar_image用の元画像
+  mind_file_url text,      -- mindar_image用のコンパイル済み.mind
+  notes text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists attend_markers_project_idx on attend_markers (project_id);
+
+drop trigger if exists attend_markers_set_updated_at on attend_markers;
+create trigger attend_markers_set_updated_at
+before update on attend_markers
+for each row execute function set_updated_at();
+
+alter table attend_markers enable row level security;
+
+drop policy if exists "authenticated read attend_markers" on attend_markers;
+create policy "authenticated read attend_markers" on attend_markers
+  for select to authenticated using (true);
+drop policy if exists "authenticated write attend_markers" on attend_markers;
+create policy "authenticated write attend_markers" on attend_markers
+  for all to authenticated using (true) with check (true);

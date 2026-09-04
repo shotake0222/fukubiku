@@ -195,3 +195,25 @@ export interface AttendTriggerObject {
 }
 
 export type AttendTriggerWithObjects = AttendTrigger & { objects: AttendTriggerObject[] };
+
+// マーカー管理（案件ごとのAR.jsマーカー/MindARターゲット画像のライブラリ）。
+// 発火条件から選んで使い回せるようにするための、案件に紐づいたマーカーレジストリ。
+export type AttendMarkerType = "aframe" | "mindar_image";
+
+export interface AttendMarker {
+  id: string;
+  project_id: string;
+  type: AttendMarkerType;
+  name: string;
+  preview_image_url: string | null;
+  pattern_file_url: string | null; // aframe用 .patt
+  target_image_url: string | null; // mindar_image用の元画像
+  mind_file_url: string | null; // mindar_image用のコンパイル済み.mind
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendMarkerWithProject extends AttendMarker {
+  project_name: string;
+}

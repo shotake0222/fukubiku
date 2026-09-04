@@ -23,6 +23,9 @@ export default function AttendLayout({ children }: { children: React.ReactNode }
         <Link href="/admin/attend/presets" className="hover:text-pink-600">
           オブジェクト管理
         </Link>
+        <Link href="/admin/attend/markers" className="hover:text-pink-600">
+          マーカー管理
+        </Link>
       </nav>
       {children}
     </div>
