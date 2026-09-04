@@ -11,12 +11,15 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "scratch", label: "スクラッチ" },
 ];
 
+export type ServiceTag = "fukubiku" | "attend";
+
 export interface PresetObject {
   id: string;
   name: string;
   category: string | null;
   model_url: string;
   thumbnail_url: string | null;
+  service: ServiceTag | null;
   created_at: string;
 }
 
@@ -43,6 +46,109 @@ export interface Order {
   target_image_url: string | null;
   mind_file_url: string | null;
 
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- あてんど (Attend) ----
+
+export type AttendDisplayType = "aframe" | "mindar_image" | "mindar_face" | "gps";
+export type AttendPlan = "light" | "standard" | "enterprise";
+export type AttendProjectStatus = "draft" | "active" | "archived";
+export type AttendExperienceStatus = "draft" | "ready";
+
+export const ATTEND_DISPLAY_TYPES: { value: AttendDisplayType; label: string; hint: string }[] = [
+  { value: "aframe", label: "A-Frame（マーカー画像）", hint: "AR.jsパターンマーカーでトラッキング" },
+  { value: "mindar_image", label: "MindAR（画像認識）", hint: "任意の画像をアップロードしてコンパイル" },
+  { value: "mindar_face", label: "MindAR（顔認識）", hint: "顔のパーツを起点にARを表示" },
+  { value: "gps", label: "GPS位置トリガー", hint: "指定した緯度経度に近づくとARが起動" },
+];
+
+export const ATTEND_PLAN_LIMITS: Record<
+  AttendPlan,
+  {
+    label: string;
+    price: string;
+    gpsPoints: string;
+    arModels: string;
+    nfcTags: string;
+    analytics: string;
+  }
+> = {
+  light: {
+    label: "ライト",
+    price: "¥300,000〜",
+    gpsPoints: "1〜3拠点",
+    arModels: "1点",
+    nfcTags: "50枚",
+    analytics: "なし",
+  },
+  standard: {
+    label: "スタンダード",
+    price: "¥800,000〜",
+    gpsPoints: "最大10拠点",
+    arModels: "最大5種",
+    nfcTags: "100枚",
+    analytics: "あり",
+  },
+  enterprise: {
+    label: "エンタープライズ",
+    price: "個別見積",
+    gpsPoints: "無制限",
+    arModels: "フルカスタム",
+    nfcTags: "1,000枚〜",
+    analytics: "詳細解析",
+  },
+};
+
+// MindAR Face の主なアンカー候補（MediaPipe FaceMeshランドマーク番号）
+export const FACE_ANCHOR_PRESETS: { value: number; label: string }[] = [
+  { value: 10, label: "額" },
+  { value: 1, label: "鼻先" },
+  { value: 152, label: "顎" },
+  { value: 234, label: "左頬" },
+  { value: 454, label: "右頬" },
+  { value: 168, label: "両目の間" },
+];
+
+export interface AttendProject {
+  id: string;
+  client_name: string;
+  order_date: string;
+  due_date: string | null;
+  person_in_charge: string | null;
+  plan: AttendPlan;
+  nfc_tag_total: number | null;
+  nfc_tag_used: number;
+  notes: string | null;
+  status: AttendProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendExperience {
+  id: string;
+  project_id: string;
+  name: string;
+  hash: string;
+  status: AttendExperienceStatus;
+
+  display_type: AttendDisplayType;
+
+  object_source: ObjectSource;
+  preset_object_id: string | null;
+  custom_model_url: string | null;
+
+  marker_url: string | null;
+  target_image_url: string | null;
+  mind_file_url: string | null;
+  face_anchor_index: number | null;
+
+  gps_lat: number | null;
+  gps_lng: number | null;
+  gps_radius_m: number | null;
+
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }

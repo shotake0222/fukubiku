@@ -212,7 +212,7 @@ export default function BulkOrderCreator() {
           >
             CSVダウンロード
           </button>
-          <Link href="/admin" className="text-sm px-5 py-2 rounded-lg border hover:bg-slate-50">
+          <Link href="/admin/fukubiku" className="text-sm px-5 py-2 rounded-lg border hover:bg-slate-50">
             注文一覧に戻る
           </Link>
         </div>

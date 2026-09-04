@@ -10,7 +10,11 @@ export default async function OrderEditPage({ params }: { params: { id: string }
 
   const [{ data: order, error }, { data: presets }] = await Promise.all([
     supabase.from("orders").select("*").eq("id", params.id).single(),
-    supabase.from("preset_objects").select("*").order("created_at", { ascending: false }),
+    supabase
+      .from("preset_objects")
+      .select("*")
+      .or("service.eq.fukubiku,service.is.null")
+      .order("created_at", { ascending: false }),
   ]);
 
   if (error || !order) {
