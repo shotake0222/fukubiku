@@ -4,7 +4,9 @@
 // 「時間をおいて再チャレンジしてください」という案内を表示する。
 // (注文ごとに固定の景品が割り当てられる orders 側のフローはランダム再抽選ではないため対象外)
 
-// 【調整ポイント】何時間に1回、抽選し直せるようにするか。
+// クールダウン時間(何時間に1回、再抽選させるか)のデフォルト値/フォールバック値。
+// 実際の値は抽選セット(draw_groups.cooldown_hours)ごとに管理画面から設定でき、
+// これはその初期値、および値が未設定の場合のフォールバックとして使う。
 // 例: 1 なら1時間に1回、0.5なら30分に1回、24なら1日1回。
 export const DRAW_COOLDOWN_HOURS = 1;
 
@@ -28,8 +30,11 @@ export function decodeDrawCookieValue(
   return { drawnAtMs, category: categoryRaw && categoryRaw !== "none" ? categoryRaw : null };
 }
 
-export function getRemainingCooldownMs(drawnAtMs: number): number {
-  const totalMs = DRAW_COOLDOWN_HOURS * 60 * 60 * 1000;
+export function getRemainingCooldownMs(
+  drawnAtMs: number,
+  cooldownHours: number = DRAW_COOLDOWN_HOURS
+): number {
+  const totalMs = cooldownHours * 60 * 60 * 1000;
   const elapsed = Date.now() - drawnAtMs;
   return Math.max(0, totalMs - elapsed);
 }

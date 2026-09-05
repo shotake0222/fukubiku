@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
+import { DRAW_COOLDOWN_HOURS } from "@/lib/drawCooldown";
 import {
   DEFAULT_TIER_WEIGHTS,
   PRESET_CATEGORIES,
@@ -89,6 +90,7 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
   const [dueDate, setDueDate] = useState("");
   const [personInCharge, setPersonInCharge] = useState("");
   const [renewalCheckDate, setRenewalCheckDate] = useState("");
+  const [cooldownHours, setCooldownHours] = useState(String(DRAW_COOLDOWN_HOURS));
   const [notes, setNotes] = useState("");
   const [displayType, setDisplayType] = useState<DisplayType>("aframe");
 
@@ -229,6 +231,7 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
           due_date: dueDate || null,
           person_in_charge: personInCharge || null,
           renewal_check_date: renewalCheckDate || null,
+          cooldown_hours: cooldownHours ? Number(cooldownHours) : DRAW_COOLDOWN_HOURS,
           notes: notes || null,
           display_type: displayType,
           target_image_url: displayType === "mindar" ? compiledTargetUrl : null,
@@ -335,6 +338,21 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
               onChange={(e) => setRenewalCheckDate(e.target.value)}
               className="input"
             />
+          </label>
+          <label className="space-y-1 block">
+            <span className="text-sm font-medium">再抽選までの間隔(時間)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              value={cooldownHours}
+              onChange={(e) => setCooldownHours(e.target.value)}
+              className="input"
+            />
+            <span className="text-xs text-slate-400 block">
+              同じ人が共有URLに繰り返しアクセスしても、この時間が経つまでは再抽選せず
+              「時間をおいて再チャレンジ」と案内します(確率とは別の設定です)。
+            </span>
           </label>
           <label className="space-y-1 block sm:col-span-2">
             <span className="text-sm font-medium">備考</span>

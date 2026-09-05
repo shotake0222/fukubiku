@@ -101,6 +101,10 @@ export interface DrawGroup {
   target_image_url: string | null;
   mind_file_url: string | null;
 
+  /** 共有URLの再抽選クールダウン時間(時間単位)。何時間に1回、再抽選させるかを
+   * 確率(重み)とは別に抽選セットごとに設定する(lib/drawCooldown.ts参照)。 */
+  cooldown_hours: number;
+
   created_at: string;
   updated_at: string;
 }

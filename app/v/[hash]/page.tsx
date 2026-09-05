@@ -3,7 +3,12 @@ import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ARViewer from "@/components/ARViewer";
 import type { DrawGroup, DrawGroupEntry, Order, PresetObject } from "@/lib/types";
-import { decodeDrawCookieValue, drawCookieName, getRemainingCooldownMs } from "@/lib/drawCooldown";
+import {
+  DRAW_COOLDOWN_HOURS,
+  decodeDrawCookieValue,
+  drawCookieName,
+  getRemainingCooldownMs,
+} from "@/lib/drawCooldown";
 
 export const dynamic = "force-dynamic";
 
@@ -76,7 +81,8 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
   // 一定時間以内の再アクセスでは再抽選せずに「時間をおいて再チャレンジ」の案内を表示する。
   const cookieName = drawCookieName(params.hash);
   const decoded = decodeDrawCookieValue(cookies().get(cookieName)?.value);
-  const remainingCooldownMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs) : 0;
+  const cooldownHours = g.cooldown_hours ?? DRAW_COOLDOWN_HOURS;
+  const remainingCooldownMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs, cooldownHours) : 0;
 
   if (remainingCooldownMs > 0) {
     return (
@@ -88,6 +94,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
         blocked
         retryCategory={decoded?.category ?? null}
         remainingMs={remainingCooldownMs}
+        cooldownHours={cooldownHours}
       />
     );
   }
@@ -124,6 +131,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
       mindFileUrl={g.mind_file_url}
       category={category}
       hash={params.hash}
+      cooldownHours={cooldownHours}
     />
   );
 }

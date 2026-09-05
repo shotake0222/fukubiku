@@ -38,6 +38,7 @@ export default function ARViewer({
   blocked = false,
   retryCategory = null,
   remainingMs = 0,
+  cooldownHours = DRAW_COOLDOWN_HOURS,
 }: {
   displayType: DisplayType;
   modelUrl: string | null;
@@ -56,6 +57,9 @@ export default function ARViewer({
   retryCategory?: string | null;
   /** blocked時の残りクールダウン時間(ミリ秒)。 */
   remainingMs?: number;
+  /** 再抽選クールダウン時間(時間単位)。抽選セットごとに管理画面で設定した値が渡される。
+   * Cookie発行時のmax-ageに使う。未指定時はDRAW_COOLDOWN_HOURS(デフォルト値)。 */
+  cooldownHours?: number;
 }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false); // arjs or mindar
@@ -75,8 +79,8 @@ export default function ARViewer({
     cookieSetRef.current = true;
     const name = drawCookieName(hash);
     const value = encodeDrawCookieValue(category ?? null);
-    document.cookie = `${name}=${value}; max-age=${DRAW_COOLDOWN_HOURS * 3600}; path=/`;
-  }, [blocked, hash, category]);
+    document.cookie = `${name}=${value}; max-age=${cooldownHours * 3600}; path=/`;
+  }, [blocked, hash, category, cooldownHours]);
 
   useEffect(() => {
     const AFRAME = (window as any).AFRAME;
