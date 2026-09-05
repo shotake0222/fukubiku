@@ -50,7 +50,9 @@ function LoginForm() {
     });
     setResetLoading(false);
     if (error) {
-      setResetError("送信に失敗しました。メールアドレスを確認してください。");
+      // 原因を特定できるよう、Supabaseが返した実際のエラー内容も併せて表示する
+      // (Redirect URLが未許可、送信回数の制限、メールアドレス不正 など)。
+      setResetError(`送信に失敗しました: ${error.message}${error.status ? ` (status: ${error.status})` : ""}`);
       return;
     }
     setResetSent(true);
