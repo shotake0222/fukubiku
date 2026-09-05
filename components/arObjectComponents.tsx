@@ -161,6 +161,7 @@ export function ObjectEntity({
   scale,
   rotationY = 0,
   visible = true,
+  loop = true,
 }: {
   url: string;
   position?: string;
@@ -168,6 +169,12 @@ export function ObjectEntity({
   rotationY?: number;
   /** falseの間もエンティティ自体はマウントしたままにする(動画のプリロード/再生開始やモデルの読み込みを裏で進めるため)。 */
   visible?: boolean;
+  /**
+   * .glbの埋め込みアニメーションをループ再生するかどうか(true=デフォルト、焦らし演出用)。
+   * falseにすると1回再生した後、最終フレーム(=結果バッジが表示された状態)で静止したままになる
+   * (アニメーションをループさせるかどうかはコード側=ここで決める、というポリシー)。
+   */
+  loop?: boolean;
 }) {
   const kind = assetKind(url);
   const rotation = `0 ${rotationY} 0`;
@@ -202,7 +209,8 @@ export function ObjectEntity({
       rotation={rotationY ? rotation : undefined}
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
-      animation-mixer="loop: repeat"
+      // loop=falseの場合は1回再生後に最終フレーム(結果バッジ表示状態)で停止したままにする。
+      animation-mixer={loop ? "loop: repeat" : "loop: once; clampWhenFinished: true"}
       animation={
         rotationY
           ? undefined

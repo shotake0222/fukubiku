@@ -125,7 +125,7 @@ export default function ARViewer({
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0" ref={targetElRef}>
-            <ObjectEntity url={modelUrl} visible={revealed} />
+            <ObjectEntity url={modelUrl} visible={revealed} loop={false} />
             {!revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} />
             )}
@@ -142,7 +142,7 @@ export default function ARViewer({
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
-            <ObjectEntity url={modelUrl} visible={revealed} />
+            <ObjectEntity url={modelUrl} visible={revealed} loop={false} />
             {!revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} />
             )}
