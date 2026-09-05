@@ -16,18 +16,33 @@ export function guessCategoryFromFilename(nameOrUrl: string): string | null {
 
 export type FormatPref = "glb" | "mp4" | null;
 
-function isGlb(p: PresetObject) {
-  return /\.glb(\?|$)/i.test(p.model_url);
-}
 function isMp4(p: PresetObject) {
   return /\.mp4(\?|$)/i.test(p.model_url);
 }
+function isImage(p: PresetObject) {
+  return /\.(gif|png|jpe?g|webp)(\?|$)/i.test(p.model_url);
+}
+// 3Dモデル判定は「動画でも画像でもない」で行う(components/arObjectComponents.tsx の
+// assetKind() と同じ基準)。.glb だけでなく .gltf 等、拡張子が何であれ動画/画像以外は
+// すべて3Dモデル扱いにする(過去に.gltfでアップロードされたものを見落とさないため)。
+function isModel(p: PresetObject) {
+  return !isMp4(p) && !isImage(p);
+}
 
-// あるカテゴリの中に、3Dオブジェクト(glb)版とMP4版の両方が(景品名を問わず)
+// カテゴリの一致判定。本来はスラッグ(例: "amida")で統一されているはずだが、
+// 手動登録時に日本語ラベル(例: "あみだくじ")がそのまま入ってしまっているデータが
+// 混在していても拾えるよう、対応するラベルとの一致も許容する。
+function matchesCategory(p: PresetObject, category: string): boolean {
+  if (p.category === category) return true;
+  const found = PRESET_CATEGORIES.find((c) => c.value === category);
+  return !!found && p.category === found.label;
+}
+
+// あるカテゴリの中に、3Dオブジェクト版とMP4版の両方が(景品名を問わず)
 // 存在するかどうか。両方ある場合、UI側で「3Dオブジェクト/MP4」を選ばせる。
 export function categoryHasBothFormats(presets: PresetObject[], category: string): boolean {
-  const inCat = presets.filter((p) => p.category === category);
-  return inCat.some(isGlb) && inCat.some(isMp4);
+  const inCat = presets.filter((p) => matchesCategory(p, category));
+  return inCat.some(isModel) && inCat.some(isMp4);
 }
 
 // 「カテゴリ」+「景品名(1等/はずれ 等)」から、該当するテンプレートを1つ選ぶ。
@@ -40,14 +55,14 @@ export function resolvePresetForTier(
   label: string,
   formatPref?: FormatPref
 ): PresetObject | null {
-  const candidates = presets.filter((p) => p.category === category && p.name.includes(label));
+  const candidates = presets.filter((p) => matchesCategory(p, category) && p.name.includes(label));
   if (candidates.length === 0) return null;
   if (formatPref === "mp4") {
-    return candidates.find(isMp4) ?? candidates.find((p) => !isGlb(p)) ?? candidates[0];
+    return candidates.find(isMp4) ?? candidates[0];
   }
   if (formatPref === "glb") {
-    return candidates.find(isGlb) ?? candidates[0];
+    return candidates.find(isModel) ?? candidates[0];
   }
-  const threeD = candidates.find(isGlb);
+  const threeD = candidates.find(isModel);
   return threeD ?? candidates[0];
 }
