@@ -15,6 +15,12 @@ import {
   registerAlphaVideoComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
+import {
+  DRAW_COOLDOWN_HOURS,
+  buildRetryMessage,
+  drawCookieName,
+  encodeDrawCookieValue,
+} from "@/lib/drawCooldown";
 
 const DEFAULT_MARKER_URL = "/markers/patternkuji.patt";
 // マーカー/ターゲットを検出してから結果を表示するまでの「焦らし」時間(ミリ秒)。
@@ -28,14 +34,28 @@ export default function ARViewer({
   mindFileUrl,
   markerUrl,
   category,
+  hash,
+  blocked = false,
+  retryCategory = null,
+  remainingMs = 0,
 }: {
   displayType: DisplayType;
   modelUrl: string | null;
   mindFileUrl: string | null;
   markerUrl?: string | null;
-  /** fukubikuの固定6カテゴリ(あみだ/ボックス/おみくじ/ダーツ/ガラガラ/スクラッチ)。
+  /** fukubikuの固定カテゴリ(あみだ/ボックス/おみくじ/ダーツ/ガラガラ/スクラッチ/...)。
    * 焦らし演出をカテゴリ専用のものにするために使う。カスタムアップロード等ではnull。 */
   category?: string | null;
+  /** 抽選セット(draw_groups)の共有URLのハッシュ。再抽選クールダウン用のCookieを
+   * このハッシュ単位で発行するために使う(orders側の固定景品フローでは未指定でよい)。 */
+  hash?: string;
+  /** trueの場合、クールダウン中(Cookieで検出済み)につきAR演出自体を行わず、
+   * 「時間をおいて再チャレンジ」の案内だけを表示する。 */
+  blocked?: boolean;
+  /** blocked時、前回の抽選で選ばれていたカテゴリ(案内文言の出し分けに使用)。 */
+  retryCategory?: string | null;
+  /** blocked時の残りクールダウン時間(ミリ秒)。 */
+  remainingMs?: number;
 }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false); // arjs or mindar
@@ -44,6 +64,19 @@ export default function ARViewer({
   const registeredRef = useRef(false);
   const targetElRef = useRef<any>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cookieSetRef = useRef(false);
+
+  // 新規に抽選が行われた(blockedでない)場合、クールダウン用のCookieを1回だけ発行する。
+  // このページ自体はサーバーコンポーネントでレンダーされるため、レンダー中にCookieを
+  // 発行することはできない(Server Action / Route Handler以外では不可)。そのため、
+  // クライアント側でマウント時にdocument.cookieへ書き込む形にしている。
+  useEffect(() => {
+    if (blocked || !hash || cookieSetRef.current) return;
+    cookieSetRef.current = true;
+    const name = drawCookieName(hash);
+    const value = encodeDrawCookieValue(category ?? null);
+    document.cookie = `${name}=${value}; max-age=${DRAW_COOLDOWN_HOURS * 3600}; path=/`;
+  }, [blocked, hash, category]);
 
   useEffect(() => {
     const AFRAME = (window as any).AFRAME;
@@ -80,6 +113,14 @@ export default function ARViewer({
       if (revealTimerRef.current) clearTimeout(revealTimerRef.current);
     };
   }, []);
+
+  if (blocked) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white text-sm px-6 text-center">
+        {buildRetryMessage(retryCategory, remainingMs)}
+      </div>
+    );
+  }
 
   if (!modelUrl || (displayType === "mindar" && !mindFileUrl)) {
     return (

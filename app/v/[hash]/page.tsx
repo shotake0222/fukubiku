@@ -1,7 +1,9 @@
+import { cookies } from "next/headers";
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ARViewer from "@/components/ARViewer";
 import type { DrawGroup, DrawGroupEntry, Order, PresetObject } from "@/lib/types";
+import { decodeDrawCookieValue, drawCookieName, getRemainingCooldownMs } from "@/lib/drawCooldown";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,26 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
 
   const g = group as DrawGroup;
 
+  // 共有URLは誰でも何度でもアクセスできてしまうため、Cookieで前回の抽選時刻を確認し、
+  // 一定時間以内の再アクセスでは再抽選せずに「時間をおいて再チャレンジ」の案内を表示する。
+  const cookieName = drawCookieName(params.hash);
+  const decoded = decodeDrawCookieValue(cookies().get(cookieName)?.value);
+  const remainingCooldownMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs) : 0;
+
+  if (remainingCooldownMs > 0) {
+    return (
+      <ARViewer
+        displayType={g.display_type}
+        modelUrl={null}
+        mindFileUrl={g.mind_file_url}
+        category={null}
+        blocked
+        retryCategory={decoded?.category ?? null}
+        remainingMs={remainingCooldownMs}
+      />
+    );
+  }
+
   const { data: entries } = await supabase
     .from("draw_group_entries")
     .select("*")
@@ -101,6 +123,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
       modelUrl={modelUrl}
       mindFileUrl={g.mind_file_url}
       category={category}
+      hash={params.hash}
     />
   );
 }
