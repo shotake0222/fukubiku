@@ -221,7 +221,7 @@ export default function ARViewer({
         <a-scene
           embedded
           vr-mode-ui="enabled: false"
-          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; patternRatio: 0.9;"
+          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; patternRatio: 0.9; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
