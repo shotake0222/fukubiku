@@ -17,18 +17,81 @@ html, body {
   display: none !important;
 }
 
-/* AR.jsはカメラ映像の<video id="arjs-video">を z-index:-2 で body直下に置く。
+/* ---- ARビューアの描画レイヤー ----
+   AR.jsはカメラ映像の<video id="arjs-video">を z-index:-2 で body直下に置く。
    仕様上、負のz-indexの要素は「ルート(body)の背景より手前」に描画されるはずだが、
    実機のスマホでは背景の下に隠れてしまい、カメラ映像がまったく表示されない
-   (背景色を白にすると白一色、黒にすると黒一色になる)状態が確認された。
-   負のz-indexに依存せず、映像を0、A-Frameのcanvas(透明・3D描画用)を1にして
-   「映像の上にcanvas」という重なり順を明示する。 */
-#arjs-video {
-  z-index: 0 !important;
+   (背景を白にすると白一色、黒にすると黒一色になる)状態が確認された。
+
+   そこで、負のz-indexとbody直下という配置に依存するのをやめ、
+   1. isolation:isolate で独立した重なり順の文脈を作ったコンテナを用意し
+   2. AR.jsが作ったvideoをそのコンテナの中へ移動させ(ARViewer側のeffect)
+   3. video=0 / a-scene・canvas=1 と明示的な重なり順を与える
+   という構成にする。これは実運用中の別サービス(AR.js+MindAR)で
+   安定動作している構成と同じ考え方。
+
+   サイズもAR.js/A-Frameの計算に任せず100%固定にする。このとき
+   margin を 0 に戻すのが重要で、AR.jsが中央寄せのために付ける
+   負のmargin(スマホで-368px等)が残ったままだと、幅だけ100%にしても
+   要素が画面外へずれて「左半分だけ映る」状態になる。 */
+/* AR.js(THREEx.ArToolkitSource)は、カメラ映像を画面全体で覆うための計算結果を
+   <body> そのものにインラインで書き込む。実機で確認された値の例:
+     body { width: 1125.33px; height: 844px; margin-left: -367.5px; }
+   これによりページ全体が左に367px(PCでは上に90px)ずれ、画面のほとんどが
+   ビューポートの外へ出てしまう。ページ背景だけが見える状態になるため、
+   背景が白なら「ホワイトアウト」、黒なら「ブラックアウト」に見えていた。
+   PCで「画面下部に一瞬だけカメラが映る」現象も、上に90pxずれた結果
+   下端にだけ映像が残っていたもの。
+   ARビューア表示中だけ ar-active を付け、bodyのサイズ・marginを固定して
+   このずれを打ち消す(管理画面などのスクロールに影響しないようクラスで限定する)。 */
+html.ar-active,
+body.ar-active {
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100vw !important;
+  max-width: 100vw !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+  overflow: hidden !important;
+  background: #000 !important;
 }
 
-.a-canvas {
+.ar-camera-viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  isolation: isolate;
+  background: #000;
+}
+
+.ar-camera-viewport video,
+.ar-camera-viewport a-scene,
+.ar-camera-viewport .a-canvas {
+  position: absolute !important;
+  inset: 0 !important;
+  top: 0 !important;
+  left: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+}
+
+.ar-camera-viewport video {
+  z-index: 0 !important;
+  object-fit: cover !important;
+}
+
+.ar-camera-viewport a-scene,
+.ar-camera-viewport .a-canvas {
   z-index: 1 !important;
+  background: transparent !important;
 }
 
 @layer components {
