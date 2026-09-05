@@ -117,6 +117,34 @@ export function registerCenterModelComponent(AFRAME: any) {
         mesh.position.sub(center);
       };
       this.el.addEventListener("model-loaded", apply);
+      // 既に読み込み済みのケース(イベントを取り逃した場合)にも対応
+      if (this.el.getObject3D("mesh")) apply();
+    },
+  });
+}
+
+// マーカーの追跡が一瞬途切れただけでオブジェクトが消え、チカチカして見える問題への対策。
+// AR.jsは検出できなかったフレームで即座に非表示にするため、手ブレや一瞬の
+// ピンボケでも消えてしまう。直近まで見えていた場合は、少しの間だけ最後の姿勢のまま
+// 表示を維持して、細かい明滅を吸収する。
+export function registerMarkerHoldComponent(AFRAME: any) {
+  if (AFRAME.components["marker-hold"]) return;
+  AFRAME.registerComponent("marker-hold", {
+    schema: { ms: { type: "number", default: 700 } },
+    init() {
+      this.lastSeen = 0;
+    },
+    tick() {
+      const now = performance.now();
+      if (this.el.object3D.visible) {
+        // 検出できているフレーム: 最終検出時刻を更新するだけ
+        this.lastSeen = now;
+        return;
+      }
+      // 検出できていないフレーム: 直近まで見えていたなら表示を保つ
+      if (this.lastSeen && now - this.lastSeen < this.data.ms) {
+        this.el.object3D.visible = true;
+      }
     },
   });
 }

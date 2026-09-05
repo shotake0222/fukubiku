@@ -15,6 +15,7 @@ import {
   registerAlphaVideoComponent,
   registerCenterModelComponent,
   registerGifImageComponent,
+  registerMarkerHoldComponent,
 } from "./arObjectComponents";
 import {
   DRAW_COOLDOWN_HOURS,
@@ -142,6 +143,7 @@ export default function ARViewer({
       registerGifImageComponent(AFRAME);
       registerAlphaVideoComponent(AFRAME);
       registerCenterModelComponent(AFRAME);
+      registerMarkerHoldComponent(AFRAME);
       registeredRef.current = true;
     }
   }, [aframeLoaded]);
@@ -536,7 +538,21 @@ export default function ARViewer({
         >
           {/* preset="custom" は旧実装と同じ指定。省略時の既定プリセットに
               引きずられないよう、独自パターンを使うことを明示しておく。 */}
-          <a-marker preset="custom" type="pattern" url={marker} ref={targetElRef}>
+          {/* smooth系: AR.jsの姿勢スムージング。1フレームでも検出を外すと
+              オブジェクトが消えてチカチカするため、数フレーム分を平均して安定させる。
+              marker-hold: それでも一瞬途切れた場合に、最後の姿勢のまま少しだけ
+              表示を保って明滅を吸収する(独自コンポーネント)。 */}
+          <a-marker
+            preset="custom"
+            type="pattern"
+            url={marker}
+            smooth="true"
+            smoothCount="10"
+            smoothTolerance="0.01"
+            smoothThreshold="5"
+            marker-hold="ms: 700"
+            ref={targetElRef}
+          >
             <ObjectEntity
               url={modelUrl}
               scale={scale}
