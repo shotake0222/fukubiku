@@ -11,12 +11,22 @@
 //   何の絵柄か分からないガチャカプセル風のオブジェクトを高速回転+上下バウンドさせる。
 
 // .glbモデルにscale未指定(プリセット未設定)の場合の既定拡大率。
-// 0.05 → 0.15 → 0.5 と、実機で「小さすぎて判別できない」との声を受けて段階的に
-// 引き上げている。個別の作品ごとの最適値は管理画面(表示オブジェクト管理)の
-// サイズ欄、または /sales のデモ作成画面のサイズ指定で調整する。
+// プリセットの.glbは実測でおおむね1〜1.7ユニット四方(マーカー1ユニット相当)で
+// 作られているため、等倍(1)がマーカーと同じくらいの大きさになる。
+// 0.05 → 0.15 → 0.5 → 1 と、実機で「小さすぎる」との声を受けて引き上げてきた。
+// 個別の最適値は管理画面(表示オブジェクト管理)のサイズ欄、または
+// /sales のデモ作成画面のサイズ指定(?scale=)で調整する。
 // 個別のプリセットで大きさが合わない場合は、管理画面(表示オブジェクト管理)の
 // サイズ欄からこの既定値を上書きできる。
-export const DEFAULT_MODEL_SCALE = "0.5 0.5 0.5";
+export const DEFAULT_MODEL_SCALE = "1 1 1";
+
+// .glbモデルにrotation未指定の場合の既定の向き。
+// プリセットの.glbはいずれも「正面が+Z方向」を向くように作られているが、
+// AR.jsのマーカー座標系ではその面が視聴者と反対側を向いてしまい、実機で
+// 「オブジェクトが後ろから見えている」状態になっていた。Y軸まわりに180度
+// 回してマーカーを見ている側へ正面を向ける。
+// 個別に合わない場合は管理画面(表示オブジェクト管理)の向き欄で上書きできる。
+export const DEFAULT_MODEL_ROTATION = "0 180 0";
 
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
@@ -213,6 +223,7 @@ export function ObjectEntity({
   url,
   position = "0 0.6 0",
   scale,
+  rotation: rotationOverride,
   rotationY = 0,
   visible = true,
   loop = true,
@@ -220,6 +231,9 @@ export function ObjectEntity({
   url: string;
   position?: string;
   scale?: string | null;
+  /** A-Frameのrotation属性値("x y z")をそのまま指定する。指定時はrotationYより優先。
+   * 管理画面から向きを調整できるようにするために追加。 */
+  rotation?: string | null;
   rotationY?: number;
   /** falseの間もエンティティ自体はマウントしたままにする(動画のプリロード/再生開始やモデルの読み込みを裏で進めるため)。 */
   visible?: boolean;
@@ -231,7 +245,7 @@ export function ObjectEntity({
   loop?: boolean;
 }) {
   const kind = assetKind(url);
-  const rotation = `0 ${rotationY} 0`;
+  const rotation = rotationOverride || `0 ${rotationY} 0`;
   const visibleAttr = visible ? "true" : "false";
   if (kind === "video") {
     return (
@@ -260,7 +274,7 @@ export function ObjectEntity({
       gltf-model={`url(${url})`}
       position={position === "0 0.6 0" ? "0 0 0" : position}
       scale={scale || DEFAULT_MODEL_SCALE}
-      rotation={rotationY ? rotation : undefined}
+      rotation={rotationOverride || (rotationY ? rotation : DEFAULT_MODEL_ROTATION)}
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
       // loop=falseの場合は1回再生後に最終フレーム(結果バッジ表示状態)で停止したままにする。
@@ -279,7 +293,7 @@ export function ObjectEntity({
       // 見える不具合があった。loop=falseの結果表示ではこの回転を付けず、
       // animation-mixerが再生する本来のアニメーションだけに任せる。
       animation={
-        !loop || rotationY
+        !loop || rotationY || rotationOverride
           ? undefined
           : "property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
       }
@@ -299,13 +313,15 @@ export function CategorySuspenseEntity({
   category,
   position = "0 0.6 0",
   scale,
+  rotation,
 }: {
   category: string;
   position?: string;
   scale?: string | null;
+  rotation?: string | null;
 }) {
   const url = `/presets/${category}/${category}_suspense_3d.glb`;
-  return <ObjectEntity url={url} position={position} scale={scale} />;
+  return <ObjectEntity url={url} position={position} scale={scale} rotation={rotation} />;
 }
 
 export function isCategorySuspenseAvailable(category: string | null | undefined): category is string {

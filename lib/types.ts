@@ -61,9 +61,15 @@ export interface PresetObject {
   group_type: AttendPresetGroup | null;
   model_url: string;
   thumbnail_url: string | null;
-  /** 表示オブジェクトの拡大率(A-Frameのscale属性値、例: "0.15 0.15 0.15")。
+  /** 表示オブジェクトの拡大率(A-Frameのscale属性値、例: "1 1 1")。
    * 管理画面(表示オブジェクト管理)から設定する。未設定(null)ならアプリ側の既定値を使う。 */
   scale: string | null;
+  /** 表示オブジェクトの向き(A-Frameのrotation属性値、例: "0 180 0")。
+   * マーカーに対してオブジェクトの正面が向くように調整するために使う。 */
+  rotation: string | null;
+  /** 表示オブジェクトの位置(A-Frameのposition属性値、例: "0 0.5 0")。
+   * マーカー面からの浮き沈みを調整するために使う。 */
+  position: string | null;
   service: ServiceTag | null;
   created_at: string;
 }

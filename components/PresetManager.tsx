@@ -27,6 +27,63 @@ function ObjectPreview({ url }: { url: string }) {
   );
 }
 
+// "x y z" 形式の値を、X/Y/Zの3つの入力欄に分けて編集できるようにする小さな部品。
+// 3つのうちどれかを変更したら "x y z" に組み直して保存する(全部空なら未設定に戻す)。
+function XyzField({
+  label,
+  hint,
+  value,
+  placeholder,
+  disabled,
+  onSave,
+}: {
+  label: string;
+  hint?: string;
+  value: string | null;
+  placeholder?: string;
+  disabled?: boolean;
+  onSave: (value: string) => void;
+}) {
+  const parts = (value ?? "").trim().split(/\s+/).filter(Boolean);
+  const initial: [string, string, string] = [parts[0] ?? "", parts[1] ?? "", parts[2] ?? ""];
+  const [xyz, setXyz] = useState<[string, string, string]>(initial);
+
+  function commit(next: [string, string, string]) {
+    setXyz(next);
+    if (next.every((v) => v.trim() === "")) {
+      onSave("");
+      return;
+    }
+    // 一部だけ入力された場合は、空欄を0として扱う
+    onSave(next.map((v) => (v.trim() === "" ? "0" : v.trim())).join(" "));
+  }
+
+  return (
+    <div className="space-y-0.5">
+      <span className="text-[10px] text-slate-400 block">{label}</span>
+      <div className="flex gap-1">
+        {(["X", "Y", "Z"] as const).map((axis, i) => (
+          <input
+            key={axis}
+            value={xyz[i]}
+            disabled={disabled}
+            placeholder={axis}
+            onChange={(e) => {
+              const next = [...xyz] as [string, string, string];
+              next[i] = e.target.value;
+              setXyz(next);
+            }}
+            onBlur={() => commit(xyz)}
+            className="input !py-1 !px-1 !text-[11px] text-center"
+          />
+        ))}
+      </div>
+      {hint && <span className="text-[9px] text-slate-400 block">{hint}</span>}
+      {placeholder && !value && <span className="text-[9px] text-slate-300 block">{placeholder}</span>}
+    </div>
+  );
+}
+
 export interface FixedCategoryOption {
   value: string;
   label: string;
@@ -166,20 +223,26 @@ export default function PresetManager({
     }
   }
 
-  async function handleScaleSave(preset: PresetObject, value: string) {
+  // サイズ(scale)/向き(rotation)/位置(position)をその場で保存する。
+  // いずれもA-Frameの属性値と同じ "x y z" 形式の文字列。
+  async function handleTransformSave(
+    preset: PresetObject,
+    field: "scale" | "rotation" | "position",
+    value: string
+  ) {
     const next = value.trim() || null;
-    if (next === preset.scale) return;
+    if (next === (preset[field] ?? null)) return;
     setSavingScaleId(preset.id);
     setError(null);
     try {
       const { error } = await supabase
         .from("preset_objects")
-        .update({ scale: next })
+        .update({ [field]: next })
         .eq("id", preset.id);
       if (error) throw error;
-      setPresets((prev) => prev.map((p) => (p.id === preset.id ? { ...p, scale: next } : p)));
+      setPresets((prev) => prev.map((p) => (p.id === preset.id ? { ...p, [field]: next } : p)));
     } catch (err: any) {
-      setError(`サイズの保存に失敗しました: ${err.message ?? err}`);
+      setError(`保存に失敗しました: ${err.message ?? err}`);
     } finally {
       setSavingScaleId(null);
     }
@@ -237,14 +300,30 @@ export default function PresetManager({
         <label className="block space-y-0.5">
           <span className="text-[10px] text-slate-400">サイズ(scale)</span>
           <input
-            key={p.scale ?? ""}
+            key={`s-${p.scale ?? ""}`}
             defaultValue={p.scale ?? ""}
-            placeholder="既定(0.15 0.15 0.15)"
+            placeholder="既定(1 1 1)"
             disabled={savingScaleId === p.id}
-            onBlur={(e) => handleScaleSave(p, e.target.value)}
+            onBlur={(e) => handleTransformSave(p, "scale", e.target.value)}
             className="input !py-1 !text-[11px]"
           />
         </label>
+        <XyzField
+          label="向き(rotation) X Y Z"
+          hint="度。マーカーに対して正面を向かないときはYを180に"
+          value={p.rotation}
+          placeholder="既定(0 180 0)"
+          disabled={savingScaleId === p.id}
+          onSave={(v) => handleTransformSave(p, "rotation", v)}
+        />
+        <XyzField
+          label="位置(position) X Y Z"
+          hint="マーカー面からの位置。Yを上げると浮く"
+          value={p.position}
+          placeholder="既定(0 0 0)"
+          disabled={savingScaleId === p.id}
+          onSave={(v) => handleTransformSave(p, "position", v)}
+        />
         <div className="flex items-center justify-between gap-1">
           <label className="text-blue-600 hover:underline cursor-pointer">
             {replacingId === p.id ? "差し替え中..." : "ファイル差し替え"}

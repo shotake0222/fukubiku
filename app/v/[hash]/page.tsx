@@ -50,6 +50,11 @@ export default async function ViewerPage({
 }) {
   const supabase = createAdminClient();
   const scaleOverride = normalizeScaleParam(searchParams?.scale);
+  // ?rot=0 180 0 で向きを、?debug=1 で診断オーバーレイを有効にする。
+  // どちらもDBを書き換えないので、実機で値を探るのに安全に使える。
+  const rawRot = Array.isArray(searchParams?.rot) ? searchParams?.rot[0] : searchParams?.rot;
+  const rotOverride = rawRot && /^[-\d\s.,]+$/.test(rawRot) ? rawRot.trim().replace(/,/g, " ") : null;
+  const debug = (Array.isArray(searchParams?.debug) ? searchParams?.debug[0] : searchParams?.debug) === "1";
 
   const { data: order } = await supabase
     .from("orders")
@@ -63,6 +68,7 @@ export default async function ViewerPage({
     let modelUrl: string | null = o.custom_model_url;
     let category: string | null = null;
     let scale: string | null = null;
+    let rotation: string | null = null;
     if (o.object_source === "preset" && o.preset_object_id) {
       const { data: preset } = await supabase
         .from("preset_objects")
@@ -75,6 +81,7 @@ export default async function ViewerPage({
       // カスタムアップロードのオブジェクト(fukubikuの固定カテゴリに属さない)ではnullのまま。
       category = p?.category ?? null;
       scale = p?.scale ?? null;
+      rotation = p?.rotation ?? null;
     }
 
     return (
@@ -84,6 +91,8 @@ export default async function ViewerPage({
         mindFileUrl={o.mind_file_url}
         category={category}
         scale={scaleOverride ?? scale}
+        rotation={rotOverride ?? rotation}
+        debug={debug}
       />
     );
   }
@@ -139,6 +148,7 @@ export default async function ViewerPage({
   let modelUrl: string | null = chosen.custom_model_url;
   let category: string | null = null;
   let scale: string | null = null;
+  let rotation: string | null = null;
   if (chosen.object_source === "preset" && chosen.preset_object_id) {
     const { data: preset } = await supabase
       .from("preset_objects")
@@ -149,6 +159,7 @@ export default async function ViewerPage({
     modelUrl = p?.model_url ?? null;
     category = p?.category ?? null;
     scale = p?.scale ?? null;
+    rotation = p?.rotation ?? null;
   }
 
   return (
@@ -158,6 +169,8 @@ export default async function ViewerPage({
       mindFileUrl={g.mind_file_url}
       category={category}
       scale={scaleOverride ?? scale}
+      rotation={rotOverride ?? rotation}
+      debug={debug}
       hash={params.hash}
       cooldownHours={cooldownHours}
     />

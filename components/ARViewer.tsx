@@ -34,6 +34,8 @@ export default function ARViewer({
   mindFileUrl,
   markerUrl,
   scale,
+  rotation,
+  debug = false,
   category,
   hash,
   blocked = false,
@@ -49,6 +51,12 @@ export default function ARViewer({
    * 管理画面のプリセット登録時に設定した値がpreset_objects.scale経由で渡される。
    * 未指定(null/undefined)の場合はObjectEntity側の既定値を使う。 */
   scale?: string | null;
+  /** 表示オブジェクトの向き(A-Frameのrotation属性値、例: "0 180 0")。
+   * マーカーに対して正面を向けるための調整値。管理画面/URLの?rot=から渡される。 */
+  rotation?: string | null;
+  /** URLに ?debug=1 が付いている場合に、カメラ映像や要素の状態を画面上に表示する。
+   * 実機(特にスマホ)で「真っ暗で何も映らない」原因を切り分けるための診断用。 */
+  debug?: boolean;
   /** fukubikuの固定カテゴリ(あみだ/ボックス/おみくじ/ダーツ/ガラガラ/スクラッチ/...)。
    * 焦らし演出をカテゴリ専用のものにするために使う。カスタムアップロード等ではnull。 */
   category?: string | null;
@@ -205,6 +213,50 @@ export default function ARViewer({
     };
   }, [ready, displayType]);
 
+  // ?debug=1 のときだけ、カメラ映像/canvasの状態を定期的に集めて画面に出す。
+  // スマホをPCに繋がなくても、画面を見るだけで
+  //  - カメラ映像の取得自体ができているか(videoW/H, paused)
+  //  - 要素が画面内に収まっているか(rect)
+  //  - 何かに隠されていないか(z-index, 最前面の要素)
+  // が分かるようにしている。
+  const [diag, setDiag] = useState<string[]>([]);
+  useEffect(() => {
+    if (!debug) return;
+    const collect = () => {
+      const lines: string[] = [];
+      const v = document.querySelector("#arjs-video") as HTMLVideoElement | null;
+      lines.push(`ready=${ready} err=${loadError ? "あり" : "なし"}`);
+      if (!v) {
+        lines.push("video: 要素なし(カメラ取得前/失敗)");
+      } else {
+        const r = v.getBoundingClientRect();
+        const cs = getComputedStyle(v);
+        lines.push(`video: ${v.videoWidth}x${v.videoHeight} paused=${v.paused} ready=${v.readyState}`);
+        lines.push(`  rect ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)}`);
+        lines.push(`  z=${cs.zIndex} vis=${cs.visibility} op=${cs.opacity} disp=${cs.display}`);
+        const st = (v as any).srcObject as MediaStream | null;
+        const track = st?.getVideoTracks?.()[0];
+        lines.push(`  stream=${st ? "あり" : "なし"} track=${track ? track.readyState : "-"}`);
+      }
+      const c = document.querySelector(".a-canvas") as HTMLCanvasElement | null;
+      if (c) {
+        const r = c.getBoundingClientRect();
+        lines.push(
+          `canvas: rect ${Math.round(r.x)},${Math.round(r.y)} ${Math.round(r.width)}x${Math.round(r.height)} z=${getComputedStyle(c).zIndex}`
+        );
+      } else {
+        lines.push("canvas: なし");
+      }
+      const top = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+      lines.push(`中央の最前面: ${top ? `${top.tagName}.${(top.className || "").toString().slice(0, 24)}` : "-"}`);
+      lines.push(`window ${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`);
+      setDiag(lines);
+    };
+    collect();
+    const t = setInterval(collect, 1000);
+    return () => clearInterval(t);
+  }, [debug, ready, loadError]);
+
   // スマホでカメラ映像が出ない場合の保険。AR.js側でも playsinline/muted/autoplay は
   // 設定されるが、モバイルのブラウザでは自動再生が保留されたまま
   // (映像が真っ暗のまま)になることがあるため、画面のタップを拾って再生を促す。
@@ -270,6 +322,12 @@ export default function ARViewer({
         </div>
       )}
 
+      {debug && (
+        <div className="absolute top-0 left-0 right-0 z-30 bg-black/75 text-green-300 text-[10px] leading-tight p-2 font-mono whitespace-pre-wrap pointer-events-none">
+          {diag.join("\n")}
+        </div>
+      )}
+
       {ready && displayType === "mindar" && (
         <a-scene
           mindar-image={`imageTargetSrc: ${mindFileUrl}; autoStart: true; uiScanning: yes; uiLoading: yes;`}
@@ -281,7 +339,13 @@ export default function ARViewer({
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0" ref={targetElRef}>
-            <ObjectEntity url={modelUrl} scale={scale} visible={revealed} loop={false} />
+            <ObjectEntity
+              url={modelUrl}
+              scale={scale}
+              rotation={rotation}
+              visible={revealed}
+              loop={false}
+            />
             {!revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} scale={scale} />
             )}
@@ -303,7 +367,13 @@ export default function ARViewer({
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
-            <ObjectEntity url={modelUrl} scale={scale} visible={revealed} loop={false} />
+            <ObjectEntity
+              url={modelUrl}
+              scale={scale}
+              rotation={rotation}
+              visible={revealed}
+              loop={false}
+            />
             {!revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} scale={scale} />
             )}
