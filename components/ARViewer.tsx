@@ -205,6 +205,29 @@ export default function ARViewer({
     };
   }, [ready, displayType]);
 
+  // スマホでカメラ映像が出ない場合の保険。AR.js側でも playsinline/muted/autoplay は
+  // 設定されるが、モバイルのブラウザでは自動再生が保留されたまま
+  // (映像が真っ暗のまま)になることがあるため、画面のタップを拾って再生を促す。
+  // 既に再生中なら play() は何もしないので、余計な副作用はない。
+  useEffect(() => {
+    if (!ready || displayType !== "aframe") return;
+    const kick = () => {
+      const video = document.querySelector("#arjs-video") as HTMLVideoElement | null;
+      if (!video) return;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
+      if (video.paused) video.play().catch(() => {});
+    };
+    kick();
+    document.addEventListener("touchend", kick);
+    document.addEventListener("click", kick);
+    return () => {
+      document.removeEventListener("touchend", kick);
+      document.removeEventListener("click", kick);
+    };
+  }, [ready, displayType]);
+
   if (blocked) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white text-sm px-6 text-center">

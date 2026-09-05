@@ -17,6 +17,20 @@ html, body {
   display: none !important;
 }
 
+/* AR.jsはカメラ映像の<video id="arjs-video">を z-index:-2 で body直下に置く。
+   仕様上、負のz-indexの要素は「ルート(body)の背景より手前」に描画されるはずだが、
+   実機のスマホでは背景の下に隠れてしまい、カメラ映像がまったく表示されない
+   (背景色を白にすると白一色、黒にすると黒一色になる)状態が確認された。
+   負のz-indexに依存せず、映像を0、A-Frameのcanvas(透明・3D描画用)を1にして
+   「映像の上にcanvas」という重なり順を明示する。 */
+#arjs-video {
+  z-index: 0 !important;
+}
+
+.a-canvas {
+  z-index: 1 !important;
+}
+
 @layer components {
   .input {
     @apply w-full border rounded-lg px-3 py-2 text-sm bg-white;

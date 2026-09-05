@@ -100,6 +100,11 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
   // 新しいスキーマ/ロジックを追加せずに「Cookie無効」を表現できる。
   const [cooldownHours, setCooldownHours] = useState("0");
 
+  // 表示オブジェクトの大きさ。商談中に「もう少し大きく」と言われた時に、
+  // DBやプリセットを触らずその場で見比べられるよう、閲覧ページには
+  // /v/[hash]?scale=... というクエリで渡す(空欄ならプリセット/既定値のまま)。
+  const [demoScale, setDemoScale] = useState("");
+
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -224,7 +229,8 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
 
       // 結果URLをコピーする画面は挟まず、この端末をそのまま実際の閲覧ページへ遷移させる。
       // マーカー(またはターゲット画像)にかざせばその場でデモが見られる。
-      window.location.href = `/v/${hash}`;
+      const scaleQuery = demoScale.trim() ? `?scale=${encodeURIComponent(demoScale.trim())}` : "";
+      window.location.href = `/v/${hash}${scaleQuery}`;
     } catch (e: any) {
       setError(`作成中にエラーが発生しました: ${e.message ?? e}`);
       setCreating(false);
@@ -410,6 +416,52 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
           <span className="text-xs text-slate-400 block">
             0にすると毎回すぐに再抽選できます(デモ向けの初期値)。本番同様の間隔を試したい場合は
             時間数を入力してください(例: 1なら1時間に1回、本番の設定と同じ仕組みです)。
+          </span>
+        </label>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-6 space-y-4">
+        <h2 className="font-semibold">⑤ オブジェクトの大きさ(任意)</h2>
+        <p className="text-xs text-slate-500">
+          マーカーに表示される3Dオブジェクトの大きさです。数値が大きいほど大きく表示されます。
+          空欄のままなら、表示オブジェクト管理で設定したサイズ(未設定なら既定サイズ)が使われます。
+          ここでの指定はこのデモURLにのみ効くので、テンプレート自体の設定は変わりません。
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {["0.25", "0.5", "1", "2", "4"].map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setDemoScale(v)}
+              className={`text-xs px-3 py-1 rounded-full border ${
+                demoScale === v ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+              }`}
+            >
+              ×{v}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setDemoScale("")}
+            className={`text-xs px-3 py-1 rounded-full border ${
+              demoScale === "" ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+            }`}
+          >
+            既定のまま
+          </button>
+        </div>
+        <label className="space-y-1 block max-w-xs">
+          <span className="text-sm font-medium">数値で指定</span>
+          <input
+            value={demoScale}
+            onChange={(e) => setDemoScale(e.target.value)}
+            placeholder="例: 0.5 (空欄なら既定サイズ)"
+            className="input"
+          />
+          <span className="text-xs text-slate-400 block">
+            表示中でもアドレスバーの末尾の ?scale=0.5 を書き換えて再読み込みすれば、
+            その場で大きさを試せます。ちょうど良い値が決まったら、表示オブジェクト管理の
+            サイズ欄に同じ値を入れておくと次回以降の既定になります。
           </span>
         </label>
       </section>

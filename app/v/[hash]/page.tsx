@@ -26,8 +26,30 @@ function pickWeighted(entries: DrawGroupEntry[]): DrawGroupEntry | null {
   return entries[entries.length - 1];
 }
 
-export default async function ViewerPage({ params }: { params: { hash: string } }) {
+// URLの ?scale= で表示オブジェクトの大きさを一時的に上書きする。
+// /sales のデモ作成画面から「サイズを変えて即座に見比べる」ために使う想定で、
+// DBを書き換えないため商談中に安全に試せる。
+// "0.5" のような単一の数値でも、"0.5 0.5 0.5" のような3軸指定でも受け付ける。
+function normalizeScaleParam(raw: string | string[] | undefined): string | null {
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  if (!value) return null;
+  const parts = value.trim().split(/[\s,]+/).filter(Boolean);
+  if (parts.length !== 1 && parts.length !== 3) return null;
+  const nums = parts.map(Number);
+  // 不正値・ゼロ・極端な値は無視する(URLを直接いじられても壊れないように)
+  if (nums.some((n) => !Number.isFinite(n) || n <= 0 || n > 100)) return null;
+  return nums.length === 1 ? `${nums[0]} ${nums[0]} ${nums[0]}` : nums.join(" ");
+}
+
+export default async function ViewerPage({
+  params,
+  searchParams,
+}: {
+  params: { hash: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+}) {
   const supabase = createAdminClient();
+  const scaleOverride = normalizeScaleParam(searchParams?.scale);
 
   const { data: order } = await supabase
     .from("orders")
@@ -61,7 +83,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
         modelUrl={modelUrl}
         mindFileUrl={o.mind_file_url}
         category={category}
-        scale={scale}
+        scale={scaleOverride ?? scale}
       />
     );
   }
@@ -135,7 +157,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
       modelUrl={modelUrl}
       mindFileUrl={g.mind_file_url}
       category={category}
-      scale={scale}
+      scale={scaleOverride ?? scale}
       hash={params.hash}
       cooldownHours={cooldownHours}
     />

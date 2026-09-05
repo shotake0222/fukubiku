@@ -11,10 +11,12 @@
 //   何の絵柄か分からないガチャカプセル風のオブジェクトを高速回転+上下バウンドさせる。
 
 // .glbモデルにscale未指定(プリセット未設定)の場合の既定拡大率。
-// 以前は0.05だったが、実機で「小さすぎて判別できない」との声を受けて引き上げた。
+// 0.05 → 0.15 → 0.5 と、実機で「小さすぎて判別できない」との声を受けて段階的に
+// 引き上げている。個別の作品ごとの最適値は管理画面(表示オブジェクト管理)の
+// サイズ欄、または /sales のデモ作成画面のサイズ指定で調整する。
 // 個別のプリセットで大きさが合わない場合は、管理画面(表示オブジェクト管理)の
 // サイズ欄からこの既定値を上書きできる。
-export const DEFAULT_MODEL_SCALE = "0.15 0.15 0.15";
+export const DEFAULT_MODEL_SCALE = "0.5 0.5 0.5";
 
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
@@ -262,7 +264,14 @@ export function ObjectEntity({
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
       // loop=falseの場合は1回再生後に最終フレーム(結果バッジ表示状態)で停止したままにする。
-      animation-mixer={loop ? "loop: repeat" : "loop: once; clampWhenFinished: true"}
+      // visible=falseの間はtimeScale:0で「0フレーム目に止めたまま」先読みだけ進める。
+      // これが無いと、結果表示前の焦らし時間(3〜5秒)のあいだに裏でアニメーションが
+      // 最後まで再生し切ってしまい、いざ表示された時には最終フレームで停止した
+      // 静止状態になる(実機で「アニメーションしていない」と報告された事象)。
+      // 表示された瞬間にtimeScale:1へ変わり、先頭から本来の演出が再生される。
+      animation-mixer={`${
+        loop ? "loop: repeat" : "loop: once; clampWhenFinished: true"
+      }; timeScale: ${visible ? 1 : 0}`}
       // 汎用の回転フォールバックは「焦らし」演出(loop=true)専用。
       // 以前はrotationYの有無だけで判定していたため、結果発表(loop=false)の
       // 実オブジェクトにもこの永久回転が常に重なってしまい、.glbに埋め込まれた
