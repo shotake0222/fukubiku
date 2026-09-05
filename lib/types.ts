@@ -9,6 +9,9 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "garagara", label: "ガラガラ抽選" },
   { value: "omikuji", label: "おみくじ" },
   { value: "scratch", label: "スクラッチ" },
+  { value: "roulette", label: "ルーレット" },
+  { value: "dice", label: "サイコロ" },
+  { value: "treasure", label: "宝箱" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
