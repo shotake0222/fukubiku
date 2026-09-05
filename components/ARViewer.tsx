@@ -37,6 +37,7 @@ export default function ARViewer({
   markerUrl,
   scale,
   rotation,
+  position,
   debug = false,
   category,
   hash,
@@ -56,6 +57,9 @@ export default function ARViewer({
   /** 表示オブジェクトの向き(A-Frameのrotation属性値、例: "0 180 0")。
    * マーカーに対して正面を向けるための調整値。管理画面/URLの?rot=から渡される。 */
   rotation?: string | null;
+  /** 表示オブジェクトの位置(A-Frameのposition属性値、例: "0 0 -0.3")。
+   * マーカーに対する上下左右・奥行きの微調整に使う。 */
+  position?: string | null;
   /** URLに ?debug=1 が付いている場合に、カメラ映像や要素の状態を画面上に表示する。
    * 実機(特にスマホ)で「真っ暗で何も映らない」原因を切り分けるための診断用。 */
   debug?: boolean;
@@ -494,6 +498,7 @@ export default function ARViewer({
               url={modelUrl}
               scale={scale}
               rotation={rotation}
+              position={position || undefined}
               visible={revealed}
               loop={false}
             />
@@ -528,7 +533,7 @@ export default function ARViewer({
           // 「カメラ映像は出るがマーカーにまったく反応せず、エラーも出ない」状態になる。
           // 回線やDNS、拡張機能の影響を受けるため端末差が出やすい(スマホだけ動かない典型)。
           // ファイルは176バイトと小さいので同一オリジンに同梱して外部依存をなくす。
-          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat;"
+          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat; maxDetectionRate: 30;"
           // preserveDrawingBuffer: 描画後もWebGLのバッファを保持する指定。
           // これが無いと、撮影時にcanvasを読み出しても中身が空になることがある。
           // logarithmicDepthBuffer はGPUの拡張機能に依存し、端末によっては

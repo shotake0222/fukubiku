@@ -54,6 +54,8 @@ export default async function ViewerPage({
   // どちらもDBを書き換えないので、実機で値を探るのに安全に使える。
   const rawRot = Array.isArray(searchParams?.rot) ? searchParams?.rot[0] : searchParams?.rot;
   const rotOverride = rawRot && /^[-\d\s.,]+$/.test(rawRot) ? rawRot.trim().replace(/,/g, " ") : null;
+  const rawPos = Array.isArray(searchParams?.pos) ? searchParams?.pos[0] : searchParams?.pos;
+  const posOverride = rawPos && /^[-\d\s.,]+$/.test(rawPos) ? rawPos.trim().replace(/,/g, " ") : null;
   const debug = (Array.isArray(searchParams?.debug) ? searchParams?.debug[0] : searchParams?.debug) === "1";
 
   const { data: order } = await supabase
@@ -69,6 +71,7 @@ export default async function ViewerPage({
     let category: string | null = null;
     let scale: string | null = null;
     let rotation: string | null = null;
+    let position: string | null = null;
     if (o.object_source === "preset" && o.preset_object_id) {
       const { data: preset } = await supabase
         .from("preset_objects")
@@ -82,6 +85,7 @@ export default async function ViewerPage({
       category = p?.category ?? null;
       scale = p?.scale ?? null;
       rotation = p?.rotation ?? null;
+      position = p?.position ?? null;
     }
 
     return (
@@ -92,6 +96,7 @@ export default async function ViewerPage({
         category={category}
         scale={scaleOverride ?? scale}
         rotation={rotOverride ?? rotation}
+        position={posOverride ?? position}
         debug={debug}
       />
     );
@@ -149,6 +154,7 @@ export default async function ViewerPage({
   let category: string | null = null;
   let scale: string | null = null;
   let rotation: string | null = null;
+  let position: string | null = null;
   if (chosen.object_source === "preset" && chosen.preset_object_id) {
     const { data: preset } = await supabase
       .from("preset_objects")
@@ -160,6 +166,7 @@ export default async function ViewerPage({
     category = p?.category ?? null;
     scale = p?.scale ?? null;
     rotation = p?.rotation ?? null;
+    position = p?.position ?? null;
   }
 
   return (
@@ -170,6 +177,7 @@ export default async function ViewerPage({
       category={category}
       scale={scaleOverride ?? scale}
       rotation={rotOverride ?? rotation}
+      position={posOverride ?? position}
       debug={debug}
       hash={params.hash}
       cooldownHours={cooldownHours}
