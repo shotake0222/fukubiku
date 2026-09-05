@@ -13,6 +13,7 @@ import {
   isCategorySuspenseAvailable,
   loadArScript,
   registerAlphaVideoComponent,
+  registerCenterModelComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
 import {
@@ -140,6 +141,7 @@ export default function ARViewer({
     if (aframeLoaded && AFRAME && !registeredRef.current) {
       registerGifImageComponent(AFRAME);
       registerAlphaVideoComponent(AFRAME);
+      registerCenterModelComponent(AFRAME);
       registeredRef.current = true;
     }
   }, [aframeLoaded]);
@@ -460,7 +462,7 @@ export default function ARViewer({
 
       {/* 撮影ボタン */}
       {ready && !snapshot && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 pb-8 pt-4 flex flex-col items-center gap-2">
+        <div className="absolute bottom-0 left-0 right-0 z-20 pb-24 pt-4 flex flex-col items-center gap-2">
           {snapshotError && (
             <p className="text-white text-xs bg-black/70 rounded px-3 py-1 mx-4 text-center">{snapshotError}</p>
           )}
@@ -511,12 +513,30 @@ export default function ARViewer({
           // でトラッキングしており端末の向きセンサーを使わないため、この案内自体が
           // 不要。スマホでのホワイトアウトの候補としても無効化しておく。
           device-orientation-permission-ui="enabled: false"
-          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; patternRatio: 0.9; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
+          // 実績のある旧実装(index.html)の指定に揃える。スマホでだけARが出ない件の
+          // 切り分けとして、こちらで足していた差分(matrixコード検出/解像度の固定指定)を
+          // 外し、同じマーカーで動作実績のある最小構成に戻す。
+          //  - detectionMode: パターンマーカーのみ使うので mono で十分
+          //    (mono_and_matrix はマトリクスコード検出も並行して行い、端末によっては
+          //     処理が重くなって検出が不安定になりうる)
+          //  - sourceWidth/Height の固定指定は外し、端末が得意な解像度に任せる
+          // cameraParametersUrl: マーカー検出に使うカメラ内部パラメータ。
+          // 未指定だとAR.jsは既定で外部(https://ar-js-org.github.io/AR.js/data/data/camera_para.dat)へ
+          // 毎回取りに行く。ここが失敗すると検出器を初期化できず、
+          // 「カメラ映像は出るがマーカーにまったく反応せず、エラーも出ない」状態になる。
+          // 回線やDNS、拡張機能の影響を受けるため端末差が出やすい(スマホだけ動かない典型)。
+          // ファイルは176バイトと小さいので同一オリジンに同梱して外部依存をなくす。
+          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat;"
           // preserveDrawingBuffer: 描画後もWebGLのバッファを保持する指定。
           // これが無いと、撮影時にcanvasを読み出しても中身が空になることがある。
-          renderer="alpha: true; antialias: true; preserveDrawingBuffer: true; logarithmicDepthBuffer: true;"
+          // logarithmicDepthBuffer はGPUの拡張機能に依存し、端末によっては
+          // 描画されない原因になりうるため外した(旧実装でも未指定)。
+          // preserveDrawingBuffer は撮影機能に必要。
+          renderer="alpha: true; preserveDrawingBuffer: true;"
         >
-          <a-marker type="pattern" url={marker} ref={targetElRef}>
+          {/* preset="custom" は旧実装と同じ指定。省略時の既定プリセットに
+              引きずられないよう、独自パターンを使うことを明示しておく。 */}
+          <a-marker preset="custom" type="pattern" url={marker} ref={targetElRef}>
             <ObjectEntity
               url={modelUrl}
               scale={scale}

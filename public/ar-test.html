@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>AR動作テスト（fukubiku）</title>
+
+<!--
+  スマホでだけARが表示されない件を切り分けるための、単体で動く最小テストページ。
+  Next.js/Reactを一切通さず、動作実績のある旧実装(index.html)と同じ構成で
+  同じマーカー・同じ.glbを表示する。
+  端末をPCに繋がなくても状況が分かるよう、判定結果を画面に大きく表示する。
+
+    このページで出る  → アプリ側(React統合)の問題
+    このページでも出ない → 端末・ブラウザ・マーカー側の問題
+-->
+
+<style>
+  /* AR.jsは<body>自体に幅・高さ・負のmarginを書き込んでページ全体をずらすため、
+     ここで固定して打ち消す(アプリ側と同じ対策)。 */
+  html, body {
+    margin: 0 !important; padding: 0 !important;
+    width: 100vw !important; max-width: 100vw !important;
+    height: 100vh !important; max-height: 100vh !important;
+    overflow: hidden !important; background: #000 !important;
+  }
+  #arjs-video, .a-canvas {
+    position: fixed !important; top: 0 !important; left: 0 !important;
+    width: 100vw !important; height: 100vh !important;
+    margin: 0 !important; transform: none !important;
+  }
+  #arjs-video { z-index: 0 !important; object-fit: cover !important; }
+  .a-canvas { z-index: 1 !important; background: transparent !important; }
+  .a-enter-vr, .a-enter-ar { display: none !important; }
+  #status {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: rgba(0,0,0,.78); color: #7CFC7C;
+    font: 13px/1.5 monospace; padding: 8px 10px; white-space: pre-wrap;
+    pointer-events: none;
+  }
+  #status b { color: #fff; }
+  #big {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999;
+    text-align: center; padding: 14px 10px 24px;
+    background: rgba(0,0,0,.7); color: #fff;
+    font: bold 20px/1.4 sans-serif; pointer-events: none;
+  }
+</style>
+
+<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+<script src="/vendor/aframe-ar.js"></script>
+</head>
+
+<body>
+<div id="status">読み込み中...</div>
+<div id="big">マーカーにカメラを向けてください</div>
+
+<a-scene
+  embedded
+  vr-mode-ui="enabled: false"
+  device-orientation-permission-ui="enabled: false"
+  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat;"
+  renderer="alpha: true;">
+
+  <a-marker id="mk" preset="custom" type="pattern" url="/markers/patternkuji.patt">
+    <!-- 1) 依存の少ない素のボックス。これが出れば描画は生きている -->
+    <a-box position="0 0 0" scale="0.6 0.6 0.6" material="color: #ff3355"></a-box>
+    <!-- 2) 実際のプリセット.glb。ボックスは出るがこれが出ない場合はモデル側の問題 -->
+    <a-entity id="mdl"
+      gltf-model="url(/presets/garagara/garagara_atari_3d.glb)"
+      rotation="-90 0 0" scale="1 1 1"></a-entity>
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<script>
+  var found = 0, lost = 0, modelLoaded = false, modelError = "";
+  // マーカー検出の要となるカメラパラメータを実際に取得できるか確認する
+  var camParaStatus = '確認中...';
+  fetch('/vendor/camera_para.dat')
+    .then(function (r) { return r.ok ? r.arrayBuffer() : Promise.reject(r.status); })
+    .then(function (b) { camParaStatus = 'OK (' + b.byteLength + ' bytes)'; })
+    .catch(function (e) { camParaStatus = '取得失敗 ' + e; });
+  var mk = document.getElementById('mk');
+  var mdl = document.getElementById('mdl');
+  var big = document.getElementById('big');
+
+  mk.addEventListener('markerFound', function () {
+    found++;
+    big.textContent = '✅ マーカーを検出しました（' + found + '回目）';
+  });
+  mk.addEventListener('markerLost', function () {
+    lost++;
+    big.textContent = 'マーカーを見失いました（検出 ' + found + '回）';
+  });
+  mdl.addEventListener('model-loaded', function () { modelLoaded = true; });
+  mdl.addEventListener('model-error', function (e) {
+    modelError = (e && e.detail && e.detail.src) ? ('読込失敗 ' + e.detail.src) : '読込失敗';
+  });
+
+  function line(k, v) { return '<b>' + k + '</b>: ' + v + '\n'; }
+
+  setInterval(function () {
+    var v = document.querySelector('#arjs-video') || document.querySelector('video');
+    var c = document.querySelector('.a-canvas');
+    var s = '';
+    s += line('AFRAME', typeof AFRAME !== 'undefined' ? 'OK ' + AFRAME.version : '未読込');
+    s += line('AR.js', (typeof THREEx !== 'undefined' || typeof ARjs !== 'undefined') ? 'OK' : '未読込');
+    if (!v) {
+      s += line('カメラ', '映像要素なし（カメラ取得前 or 失敗）');
+    } else {
+      var st = v.srcObject, tr = st && st.getVideoTracks ? st.getVideoTracks()[0] : null;
+      s += line('カメラ', v.videoWidth + 'x' + v.videoHeight + ' paused=' + v.paused + ' track=' + (tr ? tr.readyState : '-'));
+      var r = v.getBoundingClientRect();
+      s += line('映像位置', Math.round(r.x) + ',' + Math.round(r.y) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height));
+    }
+    if (c) {
+      var cr = c.getBoundingClientRect();
+      s += line('canvas', Math.round(cr.x) + ',' + Math.round(cr.y) + ' ' + Math.round(cr.width) + 'x' + Math.round(cr.height) + ' buf=' + c.width + 'x' + c.height);
+    } else {
+      s += line('canvas', 'なし');
+    }
+    s += line('マーカー', '検出 ' + found + '回 / ロスト ' + lost + '回');
+    s += line('モデル', modelLoaded ? '読込済' : (modelError || 'まだ'));
+    s += line('カメラパラメータ', camParaStatus);
+    s += line('画面', window.innerWidth + 'x' + window.innerHeight + ' dpr=' + window.devicePixelRatio);
+    s += line('body', document.body.getAttribute('style') || '(なし)');
+    document.getElementById('status').innerHTML = s;
+  }, 500);
+
+  window.addEventListener('error', function (e) {
+    document.getElementById('big').textContent = '⚠️ エラー: ' + (e.message || '');
+  });
+</script>
+</body>
+</html>
