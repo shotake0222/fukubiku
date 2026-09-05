@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Script from "next/script";
 import type { DisplayType } from "@/lib/types";
 import {
   AFRAME_EXTRAS_SRC,
@@ -27,6 +26,33 @@ const DEFAULT_MARKER_URL = "/markers/patternkuji.patt";
 // 毎回同じ長さだと味気ないため、この範囲でランダムに揺らす。
 const REVEAL_DELAY_MIN_MS = 3000;
 const REVEAL_DELAY_MAX_MS = 5000;
+
+// スクリプトの読み込み完了(またはエラー/タイムアウト)を待つ。
+// 以前は next/script の strategy="afterInteractive" を複数並べて使っていたが、
+// 外部CDN(A-Frame本体)と同一オリジンのローカルファイル(AR.js)の読み込み完了
+// タイミング次第でonLoadが正しい順序/タイミングで発火せず、「読み込み中...」の
+// まま固まってしまう不具合があった(実機のAndroid Chromeで確認)。
+// そのため、こちらで明示的に<script>タグを生成し、実際のDOMイベント(onload/onerror)と
+// タイムアウトだけを頼りに読み込み完了を判定する、確実な方式に切り替えている。
+function loadScript(src: string, timeoutMs = 20000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = src;
+    el.async = true;
+    const timer = setTimeout(() => {
+      reject(new Error(`読み込みがタイムアウトしました: ${src}`));
+    }, timeoutMs);
+    el.onload = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    el.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`読み込みに失敗しました: ${src}`));
+    };
+    document.head.appendChild(el);
+  });
+}
 
 export default function ARViewer({
   displayType,
@@ -64,6 +90,7 @@ export default function ARViewer({
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false); // arjs or mindar
   const [extrasLoaded, setExtrasLoaded] = useState(false); // aframe-extras (animation-mixer)
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState(false);
   const registeredRef = useRef(false);
   const targetElRef = useRef<any>(null);
@@ -81,6 +108,38 @@ export default function ARViewer({
     const value = encodeDrawCookieValue(category ?? null);
     document.cookie = `${name}=${value}; max-age=${cooldownHours * 3600}; path=/`;
   }, [blocked, hash, category, cooldownHours]);
+
+  // A-Frame本体を読み込んでから、それに依存するaframe-extrasとAR.js/MindARを読み込む。
+  // (blocked時や景品未設定時はAR自体を描画しないので、その場合は何もしない)
+  useEffect(() => {
+    if (blocked || !modelUrl || (displayType === "mindar" && !mindFileUrl)) return;
+    let cancelled = false;
+
+    async function run() {
+      try {
+        await loadScript(AFRAME_SRC);
+        if (cancelled) return;
+        setAframeLoaded(true);
+
+        const engineSrc = displayType === "mindar" ? MINDAR_IMAGE_AFRAME_SRC : ARJS_SRC;
+        await Promise.all([
+          loadScript(AFRAME_EXTRAS_SRC).then(() => {
+            if (!cancelled) setExtrasLoaded(true);
+          }),
+          loadScript(engineSrc).then(() => {
+            if (!cancelled) setEngineLoaded(true);
+          }),
+        ]);
+      } catch (e: any) {
+        if (!cancelled) setLoadError(e?.message ?? String(e));
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [blocked, modelUrl, mindFileUrl, displayType]);
 
   useEffect(() => {
     const AFRAME = (window as any).AFRAME;
@@ -136,34 +195,20 @@ export default function ARViewer({
 
   return (
     <div className="h-screen w-screen bg-black relative">
-      {/* aframe-extras・AR.js・MindARはいずれも「A-Frame本体(グローバルのAFRAME/THREE)が
-          既に読み込み済みであること」を前提にしたコードになっている。すべてを同時に
-          <Script>タグで並行読み込みすると、外部CDN(A-Frame本体)より同一オリジンの
-          ローカルファイル(AR.js)の方が先に読み込み完了してしまう回線環境(特にモバイル回線)で
-          「Cannot read properties of undefined (reading 'EventDispatcher')」のような
-          クラッシュが発生し、読み込み画面のまま固まってしまう不具合があった。
-          これを防ぐため、A-Frame本体の読み込み完了(aframeLoaded)を待ってから、
-          残りのスクリプトをDOMに追加するようにしている。 */}
-      <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
-      {aframeLoaded && (
-        <Script
-          src={AFRAME_EXTRAS_SRC}
-          strategy="afterInteractive"
-          onLoad={() => setExtrasLoaded(true)}
-        />
-      )}
-      {aframeLoaded && displayType === "aframe" && (
-        <Script src={ARJS_SRC} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
-      )}
-      {aframeLoaded && displayType === "mindar" && (
-        <Script
-          src={MINDAR_IMAGE_AFRAME_SRC}
-          strategy="afterInteractive"
-          onLoad={() => setEngineLoaded(true)}
-        />
+      {loadError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 text-white text-sm px-6 text-center z-20">
+          <p>読み込みに失敗しました。電波状況の良い場所でもう一度お試しください。</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-lg border border-white/40 hover:bg-white/10"
+          >
+            再読み込み
+          </button>
+        </div>
       )}
 
-      {!ready && (
+      {!ready && !loadError && (
         <div className="absolute inset-0 flex items-center justify-center text-white text-sm z-10">
           読み込み中...
         </div>
