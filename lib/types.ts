@@ -12,6 +12,16 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "roulette", label: "ルーレット" },
   { value: "dice", label: "サイコロ" },
   { value: "treasure", label: "宝箱" },
+  { value: "slot", label: "スロット" },
+  { value: "gacha", label: "ガチャガチャ" },
+  { value: "mallet", label: "打ち出の小槌" },
+  { value: "cat", label: "招き猫" },
+  { value: "daruma", label: "だるま" },
+  { value: "lantern", label: "ランタン" },
+  { value: "firework", label: "打ち上げ花火" },
+  { value: "airlottery", label: "エアー抽選機" },
+  { value: "fan", label: "扇子" },
+  { value: "pachinko", label: "パチンコ" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
