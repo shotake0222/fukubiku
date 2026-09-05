@@ -285,9 +285,27 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
       <h1 className="text-lg font-bold">景品セット一括作成</h1>
       <p className="text-sm text-slate-500">
         1つのクライアントについて、「1等・2等・はずれ」のような複数の景品パターンをまとめて作成し、
-        景品ごとに個別の注文・クライアント提供URLを一括発行します(景品ごとに固定のURLになります。
-        アクセスの都度サーバーが確率で抽選するタイプを作りたい場合は「確率抽選セット作成」を使ってください)。
+        景品ごとに個別の注文・クライアント提供URLを一括発行します。ここで作る注文は
+        <strong>景品ごとに固定のURL</strong>になります(1つのURLに複数の景品を割り当てて確率で抽選、
+        という機能はここにはありません)。
       </p>
+
+      <section className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 space-y-2">
+        <h2 className="font-semibold text-indigo-900">
+          確率(%)で当たり外れを抽選したい場合はこちら
+        </h2>
+        <p className="text-sm text-indigo-800">
+          1つのクライアント提供URLに対して「1等○%・2等○%・はずれ○%」のように確率(重み)を設定し、
+          スキャンの都度サーバー側で抽選するタイプの景品セットは「確率抽選セット作成」から作成・編集できます。
+          確率はパーセンテージ表示で、あとからいつでも管理画面で修正すれば次のスキャンから即座に反映されます。
+        </p>
+        <Link
+          href="/admin/fukubiku/draws/new"
+          className="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700"
+        >
+          確率抽選セット作成へ進む →
+        </Link>
+      </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
         <h2 className="font-semibold">共通の注文情報</h2>
