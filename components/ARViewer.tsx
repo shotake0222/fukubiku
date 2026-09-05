@@ -91,8 +91,6 @@ export default function ARViewer({
   const [revealed, setRevealed] = useState(false);
   const registeredRef = useRef(false);
   const targetElRef = useRef<any>(null);
-  // AR.jsのカメラ映像とA-Frameのcanvasを閉じ込める描画用コンテナ
-  const arViewportRef = useRef<HTMLDivElement | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 診断用: マーカー(ターゲット)を何回検出したか
   const foundCountRef = useRef(0);
@@ -184,68 +182,32 @@ export default function ARViewer({
     };
   }, []);
 
-  // AR.jsはカメラ映像の<video id="arjs-video">をz-index:-2でbody直下に置くが、
-  // 実機のスマホではこの映像がページ背景の下に隠れてしまい、まったく表示されない
-  // (背景を白にすれば白一色、黒にすれば黒一色になる)状態が確認された。
-  // そこで負のz-index+body直下という配置に依存するのをやめ、
-  //   1. isolation:isolate で独立した重なり順を持つコンテナへvideoを移動し
-  //   2. video=0 / a-scene・canvas=1 という明示的な重なり順を与え
-  //   3. サイズと位置はCSS側で100%固定にする
-  // という構成にする(AR.js+MindARを実運用している別サービスと同じ考え方)。
-  // AR.jsとA-Frameは初期化後もインラインstyleでサイズや負のmarginを書き戻してくるため、
-  // 競合するインライン指定を定期的に消してCSSが効く状態を保つ。
+  // 描画レイヤーの調整は app/globals.css (#arjs-video / .a-canvas / ar-active) だけで行う。
+  // 以前はここでカメラ映像のDOM要素を独自コンテナへ移動し、300msごとに
+  // インラインstyleを消していたが、実機のスマホで確実に動いた単体テストページ
+  // (public/ar-test.html)はCSSのみで成立しておりDOM操作を一切していない。
+  // 動く実装との差分を無くすため、DOM操作は廃止した
+  // (再生中のvideo要素を繰り返し付け替える処理は、モバイルでは映像や
+  //  トラッキングが止まる原因になりうる)。
   useEffect(() => {
     if (!ready || displayType !== "aframe") return;
-
-    const normalize = () => {
-      const container = arViewportRef.current;
-      if (!container) return;
-
-      const videos = Array.from(document.querySelectorAll("video")) as HTMLVideoElement[];
-      const cameraVideos = videos.filter((v) => v.id === "arjs-video" || Boolean(v.srcObject));
-
-      cameraVideos.forEach((video) => {
-        // body直下に置かれたカメラ映像をコンテナ内へ取り込む
-        if (!container.contains(video)) container.prepend(video);
-        // モバイルで自動再生が保留されたままになるケースへの保険
-        video.setAttribute("playsinline", "");
-        video.setAttribute("webkit-playsinline", "true");
-        video.muted = true;
-        if (video.paused) video.play().catch(() => {});
-      });
-
-      const scene = container.querySelector("a-scene") as HTMLElement | null;
-      const canvas = container.querySelector(".a-canvas") as HTMLElement | null;
-      const targets = [scene, canvas, ...cameraVideos].filter(
-        (el): el is HTMLElement => !!el && container.contains(el)
-      );
-      // AR.jsは<body>自体にも幅・高さ・負のmarginを書き込んでページ全体をずらすため、
-      // CSS(ar-active)だけに頼らずインライン指定も消しておく。
-      targets.push(document.body, document.documentElement, container);
-      targets.forEach((el) => {
-        el.style.removeProperty("width");
-        el.style.removeProperty("height");
-        el.style.removeProperty("margin-left");
-        el.style.removeProperty("margin-top");
-        el.style.removeProperty("transform");
-      });
-    };
-
-    // AR表示中だけ、bodyのサイズ/marginを固定するクラスを付ける
     document.documentElement.classList.add("ar-active");
     document.body.classList.add("ar-active");
-
-    normalize();
-    const timer = setInterval(normalize, 300);
-    window.addEventListener("resize", normalize);
-    window.addEventListener("orientationchange", normalize);
-    const observer = new MutationObserver(normalize);
-    observer.observe(document.body, { childList: true });
+    // モバイルで自動再生が保留されたままになるケースへの保険
+    const kick = () => {
+      const video = document.querySelector("#arjs-video") as HTMLVideoElement | null;
+      if (!video) return;
+      video.setAttribute("playsinline", "");
+      video.setAttribute("webkit-playsinline", "true");
+      video.muted = true;
+      if (video.paused) video.play().catch(() => {});
+    };
+    kick();
+    document.addEventListener("touchend", kick);
+    document.addEventListener("click", kick);
     return () => {
-      clearInterval(timer);
-      window.removeEventListener("resize", normalize);
-      window.removeEventListener("orientationchange", normalize);
-      observer.disconnect();
+      document.removeEventListener("touchend", kick);
+      document.removeEventListener("click", kick);
       document.documentElement.classList.remove("ar-active");
       document.body.classList.remove("ar-active");
     };
@@ -324,17 +286,16 @@ export default function ARViewer({
   const takeSnapshot = () => {
     setSnapshotError(null);
     try {
-      const container = arViewportRef.current;
-      const video = (container?.querySelector("video") ??
-        document.querySelector("#arjs-video")) as HTMLVideoElement | null;
+      const video = (document.querySelector("#arjs-video") ??
+        document.querySelector("video")) as HTMLVideoElement | null;
       const arCanvas = document.querySelector(".a-canvas") as HTMLCanvasElement | null;
       if (!video && !arCanvas) {
         setSnapshotError("カメラ映像がまだ準備できていません。少し待ってからもう一度お試しください。");
         return;
       }
 
-      const width = Math.round(container?.clientWidth || window.innerWidth);
-      const height = Math.round(container?.clientHeight || window.innerHeight);
+      const width = Math.round(window.innerWidth);
+      const height = Math.round(window.innerHeight);
       const out = document.createElement("canvas");
       out.width = width;
       out.height = height;
@@ -364,6 +325,25 @@ export default function ARViewer({
       if (arCanvas) {
         ctx.drawImage(arCanvas, 0, 0, width, height);
       }
+
+      // 日時を写真に焼き込む。画面上の表示はDOM要素なのでcanvasには写らないため、
+      // 撮影時に同じ体裁(青文字+白フチ)で描き直す。
+      // 「いつ引いたか」を証跡として残すのが撮影機能の目的のため、必ず入れる。
+      if (nowLabel) {
+        const fontSize = Math.max(16, Math.round(width / 22));
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+        const x = width / 2;
+        const y = Math.round(fontSize * 1.2);
+        ctx.lineWidth = Math.max(3, fontSize / 5);
+        ctx.strokeStyle = "rgba(255,255,255,0.9)";
+        ctx.lineJoin = "round";
+        ctx.strokeText(nowLabel, x, y);
+        ctx.fillStyle = "#2196F3";
+        ctx.fillText(nowLabel, x, y);
+      }
+
       setSnapshot(out.toDataURL("image/png"));
     } catch (e: any) {
       console.error("[ARViewer] 撮影に失敗:", e);
@@ -552,7 +532,6 @@ export default function ARViewer({
       )}
 
       {ready && displayType === "aframe" && (
-        <div ref={arViewportRef} className="ar-camera-viewport">
         <a-scene
           embedded
           vr-mode-ui="enabled: false"
@@ -586,8 +565,8 @@ export default function ARViewer({
               引きずられないよう、独自パターンを使うことを明示しておく。 */}
           {/* smooth系: AR.jsの姿勢スムージング。1フレームでも検出を外すと
               オブジェクトが消えてチカチカするため、数フレーム分を平均して安定させる。
-              marker-hold: それでも一瞬途切れた場合に、最後の姿勢のまま少しだけ
-              表示を保って明滅を吸収する(独自コンポーネント)。 */}
+              marker-hold: 一度検出できたら、以降は最後の姿勢のまま表示を保ち続ける。
+              マーカー(筐体)は変更できないため、多少ずれても映り続けることを優先する。 */}
           <a-marker
             preset="custom"
             type="pattern"
@@ -596,7 +575,7 @@ export default function ARViewer({
             smoothCount="10"
             smoothTolerance="0.01"
             smoothThreshold="5"
-            marker-hold="ms: 700"
+            marker-hold="ms: 0"
             ref={targetElRef}
           >
             <ObjectEntity
@@ -613,7 +592,6 @@ export default function ARViewer({
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>
-        </div>
       )}
     </div>
   );

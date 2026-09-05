@@ -123,26 +123,33 @@ export function registerCenterModelComponent(AFRAME: any) {
   });
 }
 
-// マーカーの追跡が一瞬途切れただけでオブジェクトが消え、チカチカして見える問題への対策。
-// AR.jsは検出できなかったフレームで即座に非表示にするため、手ブレや一瞬の
-// ピンボケでも消えてしまう。直近まで見えていた場合は、少しの間だけ最後の姿勢のまま
-// 表示を維持して、細かい明滅を吸収する。
+// マーカーの追跡が途切れるとオブジェクトが消えてしまう問題への対策。
+// AR.jsは検出できなかったフレームで即座に非表示にするため、手ブレ・ピンボケ・
+// 照明の映り込みなどで簡単に消える。マーカー(筐体)の仕様は変更できないため、
+// アプリ側で「一度検出できたら、その姿勢のまま表示を保ち続ける」方針にする。
+// 抽選結果を見せる用途では、映り続けることのほうが姿勢の正確さより重要で、
+// 写真撮影(タイムスタンプ入り)も落ち着いて行える。
+//   ms > 0 : 最後に検出できてからその時間だけ保持する
+//   ms = 0 : 一度検出できたら保持し続ける(既定)
 export function registerMarkerHoldComponent(AFRAME: any) {
   if (AFRAME.components["marker-hold"]) return;
   AFRAME.registerComponent("marker-hold", {
-    schema: { ms: { type: "number", default: 700 } },
+    schema: { ms: { type: "number", default: 0 } },
     init() {
       this.lastSeen = 0;
+      this.everSeen = false;
     },
     tick() {
       const now = performance.now();
       if (this.el.object3D.visible) {
         // 検出できているフレーム: 最終検出時刻を更新するだけ
         this.lastSeen = now;
+        this.everSeen = true;
         return;
       }
-      // 検出できていないフレーム: 直近まで見えていたなら表示を保つ
-      if (this.lastSeen && now - this.lastSeen < this.data.ms) {
+      if (!this.everSeen) return;
+      // 検出できていないフレーム: 保持期間内(ms=0なら無期限)は表示を維持する
+      if (this.data.ms === 0 || now - this.lastSeen < this.data.ms) {
         this.el.object3D.visible = true;
       }
     },
