@@ -6,7 +6,13 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
-import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
+import {
+  DEFAULT_TIER_WEIGHTS,
+  PRESET_CATEGORIES,
+  type DisplayType,
+  type ObjectSource,
+  type PresetObject,
+} from "@/lib/types";
 import TemplatePicker from "@/components/TemplatePicker";
 
 const ASSET_BUCKET = "assets";
@@ -26,7 +32,7 @@ const QUICK_FILL: Record<string, string[]> = {
 interface Row {
   id: string;
   label: string;
-  quantity: string;
+  weight: string;
   objectSource: ObjectSource;
   presetObjectId: string | null;
   customModelUrl: string | null;
@@ -37,7 +43,7 @@ function newRow(label = ""): Row {
   return {
     id: crypto.randomUUID(),
     label,
-    quantity: "",
+    weight: label && DEFAULT_TIER_WEIGHTS[label] != null ? String(DEFAULT_TIER_WEIGHTS[label]) : "1",
     objectSource: "preset",
     presetObjectId: null,
     customModelUrl: null,
@@ -50,7 +56,7 @@ function extOf(name: string) {
   return m ? m[0] : "";
 }
 
-export default function BulkOrderCreator({ presets }: { presets: PresetObject[] }) {
+export default function DrawGroupCreator({ presets }: { presets: PresetObject[] }) {
   const supabase = useMemo(() => createClient(), []);
 
   const [clientName, setClientName] = useState("");
@@ -61,7 +67,6 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   const [notes, setNotes] = useState("");
   const [displayType, setDisplayType] = useState<DisplayType>("aframe");
 
-  const [targetFile, setTargetFile] = useState<File | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [compiledTargetUrl, setCompiledTargetUrl] = useState<string | null>(null);
@@ -70,9 +75,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [results, setResults] = useState<
-    { label: string; quantity: string; url: string }[] | null
-  >(null);
+  const [resultUrl, setResultUrl] = useState<string | null>(null);
 
   const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || "https://app.fukubikiu.com";
 
@@ -105,7 +108,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
     setError(null);
     updateRow(rowId, { uploading: true });
     try {
-      const path = `batches/${rowId}/model${extOf(file.name)}`;
+      const path = `draw_batches/${rowId}/model${extOf(file.name)}`;
       const url = await uploadToAssets(path, file);
       updateRow(rowId, { customModelUrl: url, uploading: false });
     } catch (e: any) {
@@ -116,16 +119,15 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
 
   async function handleTargetUpload(file: File) {
     setError(null);
-    setTargetFile(file);
     setCompileProgress(0);
     try {
       const batchId = crypto.randomUUID();
-      const imgPath = `batches/${batchId}/target-original${extOf(file.name) || ".jpg"}`;
+      const imgPath = `draw_batches/${batchId}/target-original${extOf(file.name) || ".jpg"}`;
       const imgUrl = await uploadToAssets(imgPath, file, file.type || "image/jpeg");
       setCompiledTargetUrl(imgUrl);
 
       const blob = await compileMindTarget(file, (p) => setCompileProgress(p));
-      const mindPath = `batches/${batchId}/target.mind`;
+      const mindPath = `draw_batches/${batchId}/target.mind`;
       const mindUrl = await uploadToAssets(mindPath, blob, "application/octet-stream");
       setCompiledMindUrl(mindUrl);
     } catch (e: any) {
@@ -135,7 +137,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
     }
   }
 
-  async function handleCreateAll() {
+  async function handleCreate() {
     setError(null);
     if (!clientName) {
       setError("クライアント名を入力してください");
@@ -152,97 +154,75 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
       setError("景品名とテンプレート(またはアップロードファイル)の両方が入った行が1つもありません");
       return;
     }
+    if (targetRows.some((r) => !r.weight || Number(r.weight) < 0 || Number.isNaN(Number(r.weight)))) {
+      setError("確率(重み)には0以上の数値を入力してください");
+      return;
+    }
 
     setCreating(true);
-    const created: { label: string; quantity: string; url: string }[] = [];
     try {
-      for (const row of targetRows) {
-        const hash = generateHash();
-
-        const { error } = await supabase.from("orders").insert({
+      const hash = generateHash();
+      const { data: group, error: groupError } = await supabase
+        .from("draw_groups")
+        .insert({
           hash,
           client_name: clientName,
-          prize_label: row.label,
           order_date: orderDate,
           due_date: dueDate || null,
           person_in_charge: personInCharge || null,
-          quantity: row.quantity ? Number(row.quantity) : null,
           renewal_check_date: renewalCheckDate || null,
           notes: notes || null,
           display_type: displayType,
-          object_source: row.objectSource,
-          preset_object_id: row.objectSource === "preset" ? row.presetObjectId : null,
-          custom_model_url: row.objectSource === "upload" ? row.customModelUrl : null,
           target_image_url: displayType === "mindar" ? compiledTargetUrl : null,
           mind_file_url: displayType === "mindar" ? compiledMindUrl : null,
           status: "ready",
-        });
-        if (error) throw error;
+        })
+        .select("id")
+        .single();
+      if (groupError || !group) throw groupError ?? new Error("作成に失敗しました");
 
-        created.push({
-          label: row.label,
-          quantity: row.quantity || "-",
-          url: `${siteOrigin}/v/${hash}`,
-        });
-      }
-      setResults(created);
+      const entries = targetRows.map((row, i) => ({
+        draw_group_id: group.id,
+        label: row.label,
+        weight: Number(row.weight),
+        object_source: row.objectSource,
+        preset_object_id: row.objectSource === "preset" ? row.presetObjectId : null,
+        custom_model_url: row.objectSource === "upload" ? row.customModelUrl : null,
+        sort_order: i,
+      }));
+      const { error: entriesError } = await supabase.from("draw_group_entries").insert(entries);
+      if (entriesError) throw entriesError;
+
+      setResultUrl(`${siteOrigin}/v/${hash}`);
     } catch (e: any) {
-      setError(`作成中にエラーが発生しました(一部は作成済みの可能性があります): ${e.message ?? e}`);
-      if (created.length) setResults(created);
+      setError(`作成中にエラーが発生しました: ${e.message ?? e}`);
     } finally {
       setCreating(false);
     }
   }
 
-  function downloadCsv() {
-    if (!results) return;
-    const header = "景品名,個数,URL\n";
-    const body = results.map((r) => `${r.label},${r.quantity},${r.url}`).join("\n");
-    const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${clientName || "orders"}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
+  const totalWeight = rows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
 
-  if (results) {
+  if (resultUrl) {
     return (
       <div className="max-w-3xl space-y-6">
         <h1 className="text-lg font-bold">作成完了</h1>
-        <p className="text-sm text-slate-500">{results.length}件の注文とクライアント提供URLを作成しました。</p>
-        <div className="bg-white rounded-xl shadow overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-100 text-left text-slate-500">
-              <tr>
-                <th className="px-4 py-2">景品名</th>
-                <th className="px-4 py-2">個数</th>
-                <th className="px-4 py-2">URL</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {results.map((r) => (
-                <tr key={r.url}>
-                  <td className="px-4 py-2">{r.label}</td>
-                  <td className="px-4 py-2">{r.quantity}</td>
-                  <td className="px-4 py-2">
-                    <code className="text-xs break-all">{r.url}</code>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <p className="text-sm text-slate-500">
+          共有URLを1つ発行しました。このURLに誰がアクセスしても、その都度サーバーが下記の確率(重み)に従って結果を抽選します。
+        </p>
+        <div className="bg-white rounded-xl shadow p-4 flex items-center gap-2">
+          <code className="text-sm bg-slate-100 rounded px-2 py-1 break-all flex-1">{resultUrl}</code>
+          <button
+            type="button"
+            onClick={() => navigator.clipboard.writeText(resultUrl)}
+            className="text-xs px-3 py-1 rounded-lg border hover:bg-slate-50 whitespace-nowrap"
+          >
+            コピー
+          </button>
         </div>
         <div className="flex gap-3">
-          <button
-            onClick={downloadCsv}
-            className="bg-slate-900 text-white rounded-lg px-5 py-2 text-sm"
-          >
-            CSVダウンロード
-          </button>
-          <Link href="/admin/fukubiku" className="text-sm px-5 py-2 rounded-lg border hover:bg-slate-50">
-            注文一覧に戻る
+          <Link href="/admin/fukubiku/draws" className="text-sm px-5 py-2 rounded-lg border hover:bg-slate-50">
+            抽選セット一覧に戻る
           </Link>
         </div>
       </div>
@@ -257,11 +237,11 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
         onLoad={() => setMindarReady(true)}
       />
 
-      <h1 className="text-lg font-bold">景品セット一括作成</h1>
+      <h1 className="text-lg font-bold">確率抽選セット作成</h1>
       <p className="text-sm text-slate-500">
-        1つのクライアントについて、「1等・2等・はずれ」のような複数の景品パターンをまとめて作成し、
-        景品ごとに個別の注文・クライアント提供URLを一括発行します(景品ごとに固定のURLになります。
-        アクセスの都度サーバーが確率で抽選するタイプを作りたい場合は「確率抽選セット作成」を使ってください)。
+        1つのクライアントについて、共有URL(QRコード)を1つだけ発行します。誰かがそのURLにアクセスするたびに、
+        サーバーが下の「確率(重み)」に従ってその都度結果を抽選します。確率はテンプレートの既定値がプリフィルされますが、
+        自由に上書きできます。作成後も抽選セットの編集画面からいつでも確率を変更でき、変更は次のアクセスから即座に反映されます。
       </p>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -306,7 +286,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
             <label key={t} className="flex items-center gap-2 text-sm">
               <input
                 type="radio"
-                name="bulkDisplayType"
+                name="drawDisplayType"
                 checked={displayType === t}
                 onChange={() => setDisplayType(t)}
               />
@@ -317,7 +297,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
         {displayType === "mindar" && (
           <div className="space-y-2 border-t pt-4">
             <p className="text-sm text-slate-500">
-              全景品で共通のターゲット画像を1枚アップロードしてください（景品ごとの動画/画像は下のリストで指定します）。
+              全景品で共通のターゲット画像を1枚アップロードしてください（景品ごとの表示物は下のリストで指定します）。
             </p>
             <input
               type="file"
@@ -335,8 +315,8 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">景品リスト</h2>
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="font-semibold">景品リストと確率(重み)</h2>
           <div className="flex flex-wrap gap-1">
             {PRESET_CATEGORIES.map((c) => (
               <button
@@ -350,6 +330,10 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
             ))}
           </div>
         </div>
+        <p className="text-xs text-slate-400">
+          「確率(重み)」は相対値です。合計を100にする必要はありません(例: 1等=1, 2等=2, 参加賞=90 のように、
+          他の行との比率だけが意味を持ちます)。現在の合計: {totalWeight || 0}
+        </p>
 
         <div className="space-y-3">
           {rows.map((row) => (
@@ -361,14 +345,17 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
                   onChange={(e) => updateRow(row.id, { label: e.target.value })}
                   className="input flex-1 min-w-[8rem]"
                 />
-                <input
-                  placeholder="個数"
-                  type="number"
-                  min={0}
-                  value={row.quantity}
-                  onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
-                  className="input w-24"
-                />
+                <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+                  確率(重み)
+                  <input
+                    type="number"
+                    min={0}
+                    step="any"
+                    value={row.weight}
+                    onChange={(e) => updateRow(row.id, { weight: e.target.value })}
+                    className="input w-20"
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={() => removeRow(row.id)}
@@ -399,11 +386,11 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <button
-        onClick={handleCreateAll}
+        onClick={handleCreate}
         disabled={creating}
         className="bg-slate-900 text-white rounded-lg px-5 py-2 text-sm disabled:opacity-50"
       >
-        {creating ? "作成中..." : "まとめて注文・URLを作成"}
+        {creating ? "作成中..." : "抽選セットを作成"}
       </button>
     </div>
   );

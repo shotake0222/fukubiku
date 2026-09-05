@@ -31,6 +31,12 @@ export default async function AdminOrdersPage() {
         <h1 className="text-lg font-bold">注文一覧</h1>
         <div className="flex gap-2">
           <Link
+            href="/admin/fukubiku/draws"
+            className="bg-white border text-sm rounded-lg px-4 py-2 hover:bg-slate-50"
+          >
+            確率抽選セット一覧
+          </Link>
+          <Link
             href="/admin/fukubiku/orders/bulk"
             className="bg-white border text-sm rounded-lg px-4 py-2 hover:bg-slate-50"
           >

@@ -1,9 +1,23 @@
 import { notFound } from "next/navigation";
 import { createAdminClient } from "@/lib/supabase/admin";
 import ARViewer from "@/components/ARViewer";
-import type { Order, PresetObject } from "@/lib/types";
+import type { DrawGroup, DrawGroupEntry, Order, PresetObject } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+// 抽選セットのentriesから、weight(重み)に応じて1件をランダムに選ぶ。
+// アクセスの都度この関数が呼ばれるため、管理画面での確率変更は次回アクセスから即座に反映される。
+function pickWeighted(entries: DrawGroupEntry[]): DrawGroupEntry | null {
+  const total = entries.reduce((sum, e) => sum + Number(e.weight), 0);
+  if (total <= 0) return entries[0] ?? null;
+  let r = Math.random() * total;
+  for (const e of entries) {
+    const w = Number(e.weight);
+    if (r < w) return e;
+    r -= w;
+  }
+  return entries[entries.length - 1];
+}
 
 export default async function ViewerPage({ params }: { params: { hash: string } }) {
   const supabase = createAdminClient();
@@ -14,32 +28,78 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
     .eq("hash", params.hash)
     .single();
 
-  if (!order) {
+  if (order) {
+    const o = order as Order;
+
+    let modelUrl: string | null = o.custom_model_url;
+    let category: string | null = null;
+    if (o.object_source === "preset" && o.preset_object_id) {
+      const { data: preset } = await supabase
+        .from("preset_objects")
+        .select("*")
+        .eq("id", o.preset_object_id)
+        .single();
+      const p = preset as PresetObject | null;
+      modelUrl = p?.model_url ?? null;
+      // 焦らし演出(結果が出るまでのプレースホルダー)をカテゴリ専用のものにするために使う。
+      // カスタムアップロードのオブジェクト(fukubikuの固定カテゴリに属さない)ではnullのまま。
+      category = p?.category ?? null;
+    }
+
+    return (
+      <ARViewer
+        displayType={o.display_type}
+        modelUrl={modelUrl}
+        mindFileUrl={o.mind_file_url}
+        category={category}
+      />
+    );
+  }
+
+  // ordersに見つからない場合、抽選セット(draw_groups)のハッシュとして解決を試みる。
+  // 1つの共有URLに対して、アクセスの都度ここで確率抽選が行われる。
+  const { data: group } = await supabase
+    .from("draw_groups")
+    .select("*")
+    .eq("hash", params.hash)
+    .single();
+
+  if (!group) {
     notFound();
   }
 
-  const o = order as Order;
+  const g = group as DrawGroup;
 
-  let modelUrl: string | null = o.custom_model_url;
+  const { data: entries } = await supabase
+    .from("draw_group_entries")
+    .select("*")
+    .eq("draw_group_id", g.id);
+
+  const entryList = ((entries as DrawGroupEntry[]) ?? []).filter((e) => Number(e.weight) > 0);
+  const chosen = pickWeighted(entryList);
+
+  if (!chosen) {
+    notFound();
+  }
+
+  let modelUrl: string | null = chosen.custom_model_url;
   let category: string | null = null;
-  if (o.object_source === "preset" && o.preset_object_id) {
+  if (chosen.object_source === "preset" && chosen.preset_object_id) {
     const { data: preset } = await supabase
       .from("preset_objects")
       .select("*")
-      .eq("id", o.preset_object_id)
+      .eq("id", chosen.preset_object_id)
       .single();
     const p = preset as PresetObject | null;
     modelUrl = p?.model_url ?? null;
-    // 焦らし演出(結果が出るまでのプレースホルダー)をカテゴリ専用のものにするために使う。
-    // カスタムアップロードのオブジェクト(fukubikuの固定6カテゴリに属さない)ではnullのまま。
     category = p?.category ?? null;
   }
 
   return (
     <ARViewer
-      displayType={o.display_type}
+      displayType={g.display_type}
       modelUrl={modelUrl}
-      mindFileUrl={o.mind_file_url}
+      mindFileUrl={g.mind_file_url}
       category={category}
     />
   );

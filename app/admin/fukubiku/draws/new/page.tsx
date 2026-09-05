@@ -1,10 +1,10 @@
 import { createClient } from "@/lib/supabase/server";
-import BulkOrderCreator from "@/components/BulkOrderCreator";
+import DrawGroupCreator from "@/components/DrawGroupCreator";
 import type { PresetObject } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default async function BulkOrderPage() {
+export default async function NewDrawGroupPage() {
   const supabase = createClient();
   const { data: presets } = await supabase
     .from("preset_objects")
@@ -12,5 +12,5 @@ export default async function BulkOrderPage() {
     .eq("service", "fukubiku")
     .order("created_at", { ascending: false });
 
-  return <BulkOrderCreator presets={(presets as PresetObject[]) ?? []} />;
+  return <DrawGroupCreator presets={(presets as PresetObject[]) ?? []} />;
 }

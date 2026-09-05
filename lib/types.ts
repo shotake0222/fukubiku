@@ -45,6 +45,60 @@ export interface PresetObject {
   created_at: string;
 }
 
+// ---- 抽選セット (draw_groups) ----
+// 1つの共有URL(QRコード)に対して、アクセスの都度サーバーがweightに従って
+// 結果を抽選するモデル。ordersテーブル(1景品=1固定URL)とは独立して共存する。
+
+// カテゴリでよく使われる景品名の既定の重み(相対値)。テンプレート選択後にこの値を
+// プリフィルし、管理画面から自由に上書きできるようにする。合計が100である必要はない。
+export const DEFAULT_TIER_WEIGHTS: Record<string, number> = {
+  "1等": 1,
+  "2等": 2,
+  "3等": 3,
+  "4等": 5,
+  "5等": 8,
+  "6等": 12,
+  "大当たり": 1,
+  "当たり": 9,
+  "クーポン": 20,
+  "はずれ": 70,
+  "参加賞": 69,
+};
+
+export interface DrawGroup {
+  id: string;
+  hash: string;
+  status: "draft" | "ready";
+
+  client_name: string;
+  order_date: string;
+  due_date: string | null;
+  person_in_charge: string | null;
+  renewal_check_date: string | null;
+  notes: string | null;
+
+  display_type: DisplayType;
+  target_image_url: string | null;
+  mind_file_url: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DrawGroupEntry {
+  id: string;
+  draw_group_id: string;
+  label: string;
+  weight: number;
+
+  object_source: ObjectSource;
+  preset_object_id: string | null;
+  custom_model_url: string | null;
+
+  sort_order: number;
+  created_at: string;
+}
+
 export interface Order {
   id: string;
   hash: string;
