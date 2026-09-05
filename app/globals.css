@@ -17,6 +17,28 @@ html, body {
   display: none !important;
 }
 
+/* AR.js(sourceType: webcam)は、内部で決めた解像度(既定では640x480など)を
+   基準に <video id="arjs-video"> とA-Frameのcanvasの実ピクセルサイズ/位置を
+   inlineスタイルで設定するため、実際のブラウザのビューポートと縦横比が
+   違う端末では、カバーしきれない領域が余白として残る。
+   - videoはzIndexが低く(裏側)、その裏にあるのはhtml/bodyの背景(既定は白)
+     → スマホでのホワイトアウトはこの余白(白)だと考えられる。
+   - canvas(A-Frame/three.jsの描画先)は前面にあり、既定のclearColorは黒
+     → PCでの半分ブラックアウトは、canvasが余白として黒く塗りつぶしている
+       部分だと考えられる。
+   video/canvasの実サイズ計算そのものを直すのではなく、CSSで強制的に
+   ビューポート全面を覆うようにして余白自体を発生させないようにする。
+   (inlineスタイルより強くするため!importantを使用) */
+#arjs-video,
+.a-canvas {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  object-fit: cover !important;
+}
+
 @layer components {
   .input {
     @apply w-full border rounded-lg px-3 py-2 text-sm bg-white;

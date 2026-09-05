@@ -263,8 +263,14 @@ export function ObjectEntity({
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
       // loop=falseの場合は1回再生後に最終フレーム(結果バッジ表示状態)で停止したままにする。
       animation-mixer={loop ? "loop: repeat" : "loop: once; clampWhenFinished: true"}
+      // 汎用の回転フォールバックは「焦らし」演出(loop=true)専用。
+      // 以前はrotationYの有無だけで判定していたため、結果発表(loop=false)の
+      // 実オブジェクトにもこの永久回転が常に重なってしまい、.glbに埋め込まれた
+      // 本来の演出アニメーションが常時回転にかき消されて「ぐるぐる回っているだけ」に
+      // 見える不具合があった。loop=falseの結果表示ではこの回転を付けず、
+      // animation-mixerが再生する本来のアニメーションだけに任せる。
       animation={
-        rotationY
+        !loop || rotationY
           ? undefined
           : "property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
       }
