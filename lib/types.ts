@@ -22,6 +22,16 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "airlottery", label: "エアー抽選機" },
   { value: "fan", label: "扇子" },
   { value: "pachinko", label: "パチンコ" },
+  { value: "jet", label: "戦闘機の的撃ち" },
+  { value: "rocket", label: "ロケット発射" },
+  { value: "meteor", label: "隕石落下" },
+  { value: "shuriken", label: "手裏剣ヒット" },
+  { value: "dragon", label: "龍が玉を掴む" },
+  { value: "iaido", label: "居合斬り" },
+  { value: "ufo", label: "UFOビーム" },
+  { value: "cannon", label: "大砲・クラッカー砲" },
+  { value: "thunder", label: "雷神の一撃" },
+  { value: "punch", label: "超パンチ" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
