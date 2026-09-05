@@ -29,9 +29,15 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isLoginPage = path === "/admin/login";
+  // パスワード再設定リンクは、まだログインセッションが無い状態でアクセスされるのが
+  // 正常なケースのため、ログインページと同様に認証チェックの対象外にする。
+  // (このページ自体は、Supabaseのリカバリー用コード/トークンを検証できた場合に
+  // 限りパスワード変更フォームを表示するので、これ自体が保護対象のデータを
+  // 表示するわけではない)
+  const isResetPasswordPage = path === "/admin/reset-password";
   const isAdminPath = path.startsWith("/admin");
 
-  if (isAdminPath && !isLoginPage && !user) {
+  if (isAdminPath && !isLoginPage && !isResetPasswordPage && !user) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin/login";
     url.searchParams.set("next", path);
