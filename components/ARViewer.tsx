@@ -11,6 +11,7 @@ import {
   ObjectEntity,
   SuspenseEntity,
   isCategorySuspenseAvailable,
+  loadArScript,
   registerAlphaVideoComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
@@ -26,33 +27,6 @@ const DEFAULT_MARKER_URL = "/markers/patternkuji.patt";
 // 毎回同じ長さだと味気ないため、この範囲でランダムに揺らす。
 const REVEAL_DELAY_MIN_MS = 3000;
 const REVEAL_DELAY_MAX_MS = 5000;
-
-// スクリプトの読み込み完了(またはエラー/タイムアウト)を待つ。
-// 以前は next/script の strategy="afterInteractive" を複数並べて使っていたが、
-// 外部CDN(A-Frame本体)と同一オリジンのローカルファイル(AR.js)の読み込み完了
-// タイミング次第でonLoadが正しい順序/タイミングで発火せず、「読み込み中...」の
-// まま固まってしまう不具合があった(実機のAndroid Chromeで確認)。
-// そのため、こちらで明示的に<script>タグを生成し、実際のDOMイベント(onload/onerror)と
-// タイムアウトだけを頼りに読み込み完了を判定する、確実な方式に切り替えている。
-function loadScript(src: string, timeoutMs = 20000): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const el = document.createElement("script");
-    el.src = src;
-    el.async = true;
-    const timer = setTimeout(() => {
-      reject(new Error(`読み込みがタイムアウトしました: ${src}`));
-    }, timeoutMs);
-    el.onload = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    el.onerror = () => {
-      clearTimeout(timer);
-      reject(new Error(`読み込みに失敗しました: ${src}`));
-    };
-    document.head.appendChild(el);
-  });
-}
 
 export default function ARViewer({
   displayType,
@@ -117,16 +91,16 @@ export default function ARViewer({
 
     async function run() {
       try {
-        await loadScript(AFRAME_SRC);
+        await loadArScript(AFRAME_SRC);
         if (cancelled) return;
         setAframeLoaded(true);
 
         const engineSrc = displayType === "mindar" ? MINDAR_IMAGE_AFRAME_SRC : ARJS_SRC;
         await Promise.all([
-          loadScript(AFRAME_EXTRAS_SRC).then(() => {
+          loadArScript(AFRAME_EXTRAS_SRC).then(() => {
             if (!cancelled) setExtrasLoaded(true);
           }),
-          loadScript(engineSrc).then(() => {
+          loadArScript(engineSrc).then(() => {
             if (!cancelled) setEngineLoaded(true);
           }),
         ]);

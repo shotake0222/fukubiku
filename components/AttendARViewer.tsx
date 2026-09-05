@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Script from "next/script";
 import type { AttendDisplayType } from "@/lib/types";
 import {
   AFRAME_EXTRAS_SRC,
@@ -10,6 +9,7 @@ import {
   MINDAR_FACE_AFRAME_SRC,
   MINDAR_IMAGE_AFRAME_SRC,
   ObjectEntity,
+  loadArScript,
   registerAlphaVideoComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
@@ -64,7 +64,47 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false);
   const [extrasLoaded, setExtrasLoaded] = useState(false); // aframe-extras (animation-mixer)
+  const [loadError, setLoadError] = useState<string | null>(null);
   const registeredRef = useRef(false);
+
+  const engineSrc = engineSrcFor(trigger.displayType);
+
+  // A-Frame本体を読み込んでから、それに依存するaframe-extrasとAR.js/MindARを読み込む
+  // (loadArScriptの実装/経緯はarObjectComponents.tsxのコメント参照)。
+  useEffect(() => {
+    let cancelled = false;
+
+    async function run() {
+      try {
+        await loadArScript(AFRAME_SRC);
+        if (cancelled) return;
+        setAframeLoaded(true);
+
+        const tasks = [
+          loadArScript(AFRAME_EXTRAS_SRC).then(() => {
+            if (!cancelled) setExtrasLoaded(true);
+          }),
+        ];
+        if (engineSrc) {
+          tasks.push(
+            loadArScript(engineSrc).then(() => {
+              if (!cancelled) setEngineLoaded(true);
+            })
+          );
+        } else {
+          setEngineLoaded(true);
+        }
+        await Promise.all(tasks);
+      } catch (e: any) {
+        if (!cancelled) setLoadError(e?.message ?? String(e));
+      }
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [engineSrc]);
 
   useEffect(() => {
     const AFRAME = (window as any).AFRAME;
@@ -78,21 +118,23 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   const ready = aframeLoaded && engineLoaded && extrasLoaded;
   const marker = trigger.markerUrl || DEFAULT_MARKER_URL;
   const anchorIndex = trigger.faceAnchorIndex ?? 10;
-  const engineSrc = engineSrcFor(trigger.displayType);
 
   return (
     <div className="h-full w-full bg-black relative">
-      <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
-      <Script
-        src={AFRAME_EXTRAS_SRC}
-        strategy="afterInteractive"
-        onLoad={() => setExtrasLoaded(true)}
-      />
-      {engineSrc && (
-        <Script src={engineSrc} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
+      {loadError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 text-white text-sm px-6 text-center z-20">
+          <p>読み込みに失敗しました。電波状況の良い場所でもう一度お試しください。</p>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-lg border border-white/40 hover:bg-white/10"
+          >
+            再読み込み
+          </button>
+        </div>
       )}
 
-      {!ready && (
+      {!ready && !loadError && (
         <div className="absolute inset-0 flex items-center justify-center text-white text-sm z-10">
           読み込み中...
         </div>

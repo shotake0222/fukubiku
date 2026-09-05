@@ -21,6 +21,41 @@ export const MINDAR_FACE_AFRAME_SRC =
 export const AFRAME_EXTRAS_SRC =
   "https://cdn.jsdelivr.net/npm/aframe-extras@7/dist/aframe-extras.animation-mixer.min.js";
 
+// スクリプトの読み込み完了(またはエラー/タイムアウト)を待つ。
+// 以前はA-Frame本体/aframe-extras/AR.js(またはMindAR)をnext/scriptの
+// strategy="afterInteractive"で複数並べて読み込んでいたが、次の2つの問題があった。
+// 1. 外部CDN(A-Frame本体)より同一オリジンのローカルファイル(AR.js)の方が先に
+//    読み込み完了してしまう回線環境で、A-Frame本体のグローバル(AFRAME/THREE)が
+//    まだ無い状態で依存側のスクリプトが実行されクラッシュする
+// 2. 1を避けるためA-Frame本体の読み込み完了を待ってから依存スクリプトを追加しても、
+//    next/script内部のキャッシュ/検知の癖により、onLoadコールバックが発火しない
+//    (ブラウザ上は読み込めているのに、Reactの状態が更新されない)ケースがある
+// のどちらでも「読み込み中...」のまま無限に固まってしまう(fukubiku/あてんど両方の
+// ARビューアで実機のAndroid Chromeにて確認)。そのため、next/scriptに頼らず、
+// document.createElement("script")で明示的に生成した<script>タグのonload/onerror
+// イベントとタイムアウトだけを頼りに読み込み完了を判定する、確実な方式に統一している。
+// 呼び出し側は「A-Frame本体を読み込み終えてから、それに依存するスクリプトを読み込む」
+// という順序を守ること。
+export function loadArScript(src: string, timeoutMs = 20000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const el = document.createElement("script");
+    el.src = src;
+    el.async = true;
+    const timer = setTimeout(() => {
+      reject(new Error(`読み込みがタイムアウトしました: ${src}`));
+    }, timeoutMs);
+    el.onload = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    el.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`読み込みに失敗しました: ${src}`));
+    };
+    document.head.appendChild(el);
+  });
+}
+
 export function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
