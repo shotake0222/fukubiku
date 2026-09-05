@@ -8,6 +8,7 @@ import { compileMindTarget } from "@/lib/mindCompiler";
 import OrderDetailsForm, { type OrderDetailsValue } from "@/components/OrderDetailsForm";
 import type { DisplayType, ObjectSource, Order, PresetObject } from "@/lib/types";
 import { PRESET_CATEGORIES } from "@/lib/types";
+import { PresetPreview } from "@/components/TemplatePicker";
 
 const ASSET_BUCKET = "assets";
 const UNCATEGORIZED = "__uncategorized__";
@@ -21,26 +22,6 @@ function categoryLabel(value: string) {
   if (value === UNCATEGORIZED) return "未分類";
   const found = PRESET_CATEGORIES.find((c) => c.value === value);
   return found ? found.label : value;
-}
-
-function PresetPreview({ url }: { url: string }) {
-  if (/\.mp4(\?|$)/i.test(url)) {
-    return (
-      <video
-        src={url}
-        className="w-full h-20 object-cover rounded bg-slate-100"
-        autoPlay
-        muted
-        loop
-        playsInline
-      />
-    );
-  }
-  if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" className="w-full h-20 object-cover rounded" />;
-  }
-  return <div className="w-full h-20 bg-slate-100 rounded" />;
 }
 
 export default function OrderEditor({

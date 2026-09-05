@@ -12,17 +12,24 @@ function categoryLabel(value: string) {
   return found ? found.label : value;
 }
 
+// このアプリのmp4アセットはすべて「左半分=RGB、右半分=アルファ」の透過動画フォーマット
+// (components/arObjectComponents.tsx の alpha-video コンポーネント参照)。
+// 素の<video>をそのまま表示すると、色情報とアルファマスクの2枚が横に並んだ状態で
+// 潰れて見えてしまうため、プレビューでは左半分(色情報)だけを切り出して表示する。
 export function PresetPreview({ url }: { url: string }) {
   if (/\.mp4(\?|$)/i.test(url)) {
     return (
-      <video
-        src={url}
-        className="w-full h-20 object-cover rounded bg-slate-100"
-        autoPlay
-        muted
-        loop
-        playsInline
-      />
+      <div className="w-full h-20 rounded bg-slate-100 overflow-hidden relative">
+        <video
+          src={url}
+          className="absolute left-0 top-1/2 -translate-y-1/2"
+          style={{ width: "200%", height: "auto", maxWidth: "none" }}
+          autoPlay
+          muted
+          loop
+          playsInline
+        />
+      </div>
     );
   }
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) {

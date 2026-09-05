@@ -13,7 +13,8 @@ import {
   type ObjectSource,
   type PresetObject,
 } from "@/lib/types";
-import TemplatePicker from "@/components/TemplatePicker";
+import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
+import { resolvePresetForTier } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -39,11 +40,15 @@ interface Row {
   uploading: boolean;
 }
 
+function defaultWeightFor(label: string): string {
+  return label && DEFAULT_TIER_WEIGHTS[label] != null ? String(DEFAULT_TIER_WEIGHTS[label]) : "1";
+}
+
 function newRow(label = ""): Row {
   return {
     id: crypto.randomUUID(),
     label,
-    weight: label && DEFAULT_TIER_WEIGHTS[label] != null ? String(DEFAULT_TIER_WEIGHTS[label]) : "1",
+    weight: defaultWeightFor(label),
     objectSource: "preset",
     presetObjectId: null,
     customModelUrl: null,
@@ -72,6 +77,12 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
   const [compiledTargetUrl, setCompiledTargetUrl] = useState<string | null>(null);
   const [compiledMindUrl, setCompiledMindUrl] = useState<string | null>(null);
 
+  // 基本の流れ:「①カテゴリを1つ選ぶ → 景品ごとのテンプレートは自動で割り当てられる →
+  // ②確率(重み)だけを見て調整する」。景品ごとに違うカテゴリを混ぜて使うことは通常ないため、
+  // テンプレートを行ごとに個別設定できるのはあくまで例外的な機能として折りたたんでおく。
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [advancedMode, setAdvancedMode] = useState(false);
+
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +102,33 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  function quickFill(category: string) {
-    setRows(QUICK_FILL[category].map((label) => newRow(label)));
+  // カテゴリを選ぶと、そのカテゴリの定番の景品名で行を埋め、それぞれ該当するテンプレートを
+  // 自動で割り当てる(名前に景品名を含むテンプレートを探す。3Dオブジェクト版があれば優先)。
+  function selectCategory(category: string) {
+    setSelectedCategory(category);
+    const labels = QUICK_FILL[category] ?? [];
+    setRows(
+      labels.map((label) => {
+        const row = newRow(label);
+        const preset = resolvePresetForTier(presets, category, label);
+        if (preset) {
+          row.presetObjectId = preset.id;
+        }
+        return row;
+      })
+    );
+  }
+
+  // 簡易モードで景品名を変更した場合、選択中のカテゴリ内で同じ名前のテンプレートを
+  // 探し直す(見つからなければテンプレート未設定のままになるので、詳細設定で選んでもらう)。
+  function updateLabel(rowId: string, label: string) {
+    const patch: Partial<Row> = { label, weight: defaultWeightFor(label) };
+    if (!advancedMode && selectedCategory) {
+      const preset = resolvePresetForTier(presets, selectedCategory, label);
+      patch.presetObjectId = preset?.id ?? null;
+      patch.objectSource = "preset";
+    }
+    updateRow(rowId, patch);
   }
 
   async function uploadToAssets(path: string, file: File | Blob, contentType?: string) {
@@ -203,6 +239,12 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
 
   const totalWeight = rows.reduce((sum, r) => sum + (Number(r.weight) || 0), 0);
 
+  function pct(weight: string) {
+    const w = Number(weight) || 0;
+    if (totalWeight <= 0) return "-";
+    return `${Math.round((w / totalWeight) * 1000) / 10}%`;
+  }
+
   if (resultUrl) {
     return (
       <div className="max-w-3xl space-y-6">
@@ -240,8 +282,8 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
       <h1 className="text-lg font-bold">確率抽選セット作成</h1>
       <p className="text-sm text-slate-500">
         1つのクライアントについて、共有URL(QRコード)を1つだけ発行します。誰かがそのURLにアクセスするたびに、
-        サーバーが下の「確率(重み)」に従ってその都度結果を抽選します。確率はテンプレートの既定値がプリフィルされますが、
-        自由に上書きできます。作成後も抽選セットの編集画面からいつでも確率を変更でき、変更は次のアクセスから即座に反映されます。
+        サーバーが下の「確率(重み)」に従ってその都度結果を抽選します。基本の流れは、下でカテゴリを1つ選べば
+        景品ごとのテンプレートは自動で設定されるので、あとは確率を見て調整するだけです。
       </p>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -315,67 +357,103 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h2 className="font-semibold">景品リストと確率(重み)</h2>
-          <div className="flex flex-wrap gap-1">
-            {PRESET_CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => quickFill(c.value)}
-                className="text-xs px-2 py-1 rounded-full border hover:bg-slate-50"
-              >
-                {c.label}の項目で埋める
-              </button>
-            ))}
-          </div>
+        <h2 className="font-semibold">① カテゴリを選ぶ</h2>
+        <p className="text-xs text-slate-400">
+          通常、1つの抽選セットの中で景品ごとに違うゲーム(カテゴリ)を混ぜて使うことはないため、
+          ここで1つ選ぶと景品ごとのテンプレートが自動で割り当てられます。
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {PRESET_CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => selectCategory(c.value)}
+              className={`text-xs px-3 py-1 rounded-full border ${
+                selectedCategory === c.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
+        <label className="flex items-center gap-2 text-sm border-t pt-3">
+          <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
+          景品ごとに個別のテンプレートを設定する(通常は不要です)
+        </label>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-6 space-y-4">
+        <h2 className="font-semibold">② 景品リストと確率(重み)</h2>
         <p className="text-xs text-slate-400">
           「確率(重み)」は相対値です。合計を100にする必要はありません(例: 1等=1, 2等=2, 参加賞=90 のように、
-          他の行との比率だけが意味を持ちます)。現在の合計: {totalWeight || 0}
+          他の行との比率だけが意味を持ちます)。右側にはその重みが実際に何%に相当するかを表示しています。
+          現在の合計: {totalWeight || 0}
         </p>
 
         <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.id} className="space-y-2 border rounded-lg p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  placeholder="景品名（例: 1等）"
-                  value={row.label}
-                  onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                  className="input flex-1 min-w-[8rem]"
-                />
-                <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
-                  確率(重み)
+          {rows.map((row) => {
+            const preview = row.objectSource === "preset" ? presets.find((p) => p.id === row.presetObjectId) : null;
+            const previewUrl = preview?.thumbnail_url || preview?.model_url || row.customModelUrl || "";
+            return (
+              <div key={row.id} className="space-y-2 border rounded-lg p-3">
+                <div className="flex flex-wrap items-center gap-2">
                   <input
-                    type="number"
-                    min={0}
-                    step="any"
-                    value={row.weight}
-                    onChange={(e) => updateRow(row.id, { weight: e.target.value })}
-                    className="input w-20"
+                    placeholder="景品名（例: 1等）"
+                    value={row.label}
+                    onChange={(e) => updateLabel(row.id, e.target.value)}
+                    className="input flex-1 min-w-[8rem]"
                   />
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.id)}
-                  className="text-xs text-red-600 hover:underline"
-                >
-                  削除
-                </button>
+                  <label className="flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap">
+                    確率(重み)
+                    <input
+                      type="number"
+                      min={0}
+                      step="any"
+                      value={row.weight}
+                      onChange={(e) => updateRow(row.id, { weight: e.target.value })}
+                      className="input w-20"
+                    />
+                  </label>
+                  <span className="text-xs text-slate-500 whitespace-nowrap w-12 text-right">
+                    {pct(row.weight)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.id)}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    削除
+                  </button>
+                </div>
+
+                {advancedMode ? (
+                  <TemplatePicker
+                    presets={presets}
+                    objectSource={row.objectSource}
+                    presetObjectId={row.presetObjectId}
+                    customModelUrl={row.customModelUrl}
+                    uploading={row.uploading}
+                    onObjectSourceChange={(s) => updateRow(row.id, { objectSource: s })}
+                    onPresetObjectIdChange={(id) => updateRow(row.id, { presetObjectId: id })}
+                    onUploadFile={(file) => handleRowUpload(row.id, file)}
+                  />
+                ) : previewUrl ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className="w-14 h-14 flex-shrink-0 overflow-hidden rounded">
+                      <PresetPreview url={previewUrl} />
+                    </div>
+                    <span className="truncate">{preview?.name || row.customModelUrl}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    {selectedCategory
+                      ? "このテンプレートが見つかりませんでした。「景品ごとに個別のテンプレートを設定する」をオンにして選んでください。"
+                      : "上でカテゴリを選ぶとテンプレートが自動で設定されます。"}
+                  </p>
+                )}
               </div>
-              <TemplatePicker
-                presets={presets}
-                objectSource={row.objectSource}
-                presetObjectId={row.presetObjectId}
-                customModelUrl={row.customModelUrl}
-                uploading={row.uploading}
-                onObjectSourceChange={(s) => updateRow(row.id, { objectSource: s })}
-                onPresetObjectIdChange={(id) => updateRow(row.id, { presetObjectId: id })}
-                onUploadFile={(file) => handleRowUpload(row.id, file)}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button type="button" onClick={addRow} className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50">

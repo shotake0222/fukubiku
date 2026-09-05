@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { AttendPresetGroup, PresetObject, ServiceTag } from "@/lib/types";
+import { PresetPreview } from "@/components/TemplatePicker";
+import { guessCategoryFromFilename } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 const OTHER_CATEGORY = "__other__";
@@ -13,22 +15,10 @@ function extOf(name: string) {
   return m ? m[0] : "";
 }
 
-function Preview({ url }: { url: string }) {
-  if (/\.mp4(\?|$)/i.test(url)) {
-    return (
-      <video
-        src={url}
-        className="w-full h-20 object-cover rounded bg-slate-100"
-        autoPlay
-        muted
-        loop
-        playsInline
-      />
-    );
-  }
-  if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) {
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={url} alt="" className="w-full h-20 object-cover rounded" />;
+// PresetPreview(mp4/画像)に加えて、3Dモデル(.glb等)の場合は簡易ラベルを表示する。
+function ObjectPreview({ url }: { url: string }) {
+  if (/\.mp4(\?|$)/i.test(url) || /\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) {
+    return <PresetPreview url={url} />;
   }
   return (
     <div className="w-full h-20 bg-slate-100 rounded flex items-center justify-center text-[10px] text-slate-400">
@@ -219,7 +209,7 @@ export default function PresetManager({
   function renderCard(p: PresetObject) {
     return (
       <div key={p.id} className="border rounded-lg p-2 text-xs space-y-2 bg-white">
-        <Preview url={p.thumbnail_url || p.model_url} />
+        <ObjectPreview url={p.thumbnail_url || p.model_url} />
         <div className="truncate font-medium">{p.name}</div>
         <div className="flex items-center justify-between gap-1">
           <label className="text-blue-600 hover:underline cursor-pointer">
@@ -330,7 +320,18 @@ export default function PresetManager({
             type="file"
             accept=".glb,.gltf,video/mp4,image/gif,image/*"
             required
-            onChange={(e) => setModelFile(e.target.files?.[0] ?? null)}
+            onChange={(e) => {
+              const file = e.target.files?.[0] ?? null;
+              setModelFile(file);
+              // ファイル名からカテゴリを推測できた場合、選択欄に自動反映する
+              // (手動で選び直すこともできるので、あくまで下書きの手間を省くための補助)。
+              if (file && fixedCategories) {
+                const guessed = guessCategoryFromFilename(file.name);
+                if (guessed && fixedCategories.some((c) => c.value === guessed)) {
+                  setCategory(guessed);
+                }
+              }
+            }}
           />
         </label>
         <label className="space-y-1 block">

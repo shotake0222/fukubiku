@@ -7,7 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
 import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
-import TemplatePicker from "@/components/TemplatePicker";
+import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
+import { resolvePresetForTier } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -67,6 +68,11 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   const [compiledTargetUrl, setCompiledTargetUrl] = useState<string | null>(null);
   const [compiledMindUrl, setCompiledMindUrl] = useState<string | null>(null);
 
+  // 基本の流れ:「①カテゴリを1つ選ぶ → 景品ごとのテンプレートは自動で割り当てられる」。
+  // 景品ごとに違うカテゴリを混ぜて使うことは通常ないため、行ごとの個別設定は折りたたんでおく。
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [advancedMode, setAdvancedMode] = useState(false);
+
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()]);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,8 +94,27 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  function quickFill(category: string) {
-    setRows(QUICK_FILL[category].map((label) => newRow(label)));
+  function selectCategory(category: string) {
+    setSelectedCategory(category);
+    setRows(
+      QUICK_FILL[category].map((label) => {
+        const row = newRow(label);
+        const preset = resolvePresetForTier(presets, category, label);
+        if (preset) row.presetObjectId = preset.id;
+        return row;
+      })
+    );
+  }
+
+  // 簡易モードで景品名を変更した場合、選択中のカテゴリ内で同じ名前のテンプレートを探し直す。
+  function updateLabel(rowId: string, label: string) {
+    const patch: Partial<Row> = { label };
+    if (!advancedMode && selectedCategory) {
+      const preset = resolvePresetForTier(presets, selectedCategory, label);
+      patch.presetObjectId = preset?.id ?? null;
+      patch.objectSource = "preset";
+    }
+    updateRow(rowId, patch);
   }
 
   async function uploadToAssets(path: string, file: File | Blob, contentType?: string) {
@@ -335,60 +360,91 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">景品リスト</h2>
-          <div className="flex flex-wrap gap-1">
-            {PRESET_CATEGORIES.map((c) => (
-              <button
-                key={c.value}
-                type="button"
-                onClick={() => quickFill(c.value)}
-                className="text-xs px-2 py-1 rounded-full border hover:bg-slate-50"
-              >
-                {c.label}の項目で埋める
-              </button>
-            ))}
-          </div>
+        <h2 className="font-semibold">① カテゴリを選ぶ</h2>
+        <p className="text-xs text-slate-400">
+          通常、1つの景品セットの中で景品ごとに違うゲーム(カテゴリ)を混ぜて使うことはないため、
+          ここで1つ選ぶと景品ごとのテンプレートが自動で割り当てられます。
+        </p>
+        <div className="flex flex-wrap gap-2">
+          {PRESET_CATEGORIES.map((c) => (
+            <button
+              key={c.value}
+              type="button"
+              onClick={() => selectCategory(c.value)}
+              className={`text-xs px-3 py-1 rounded-full border ${
+                selectedCategory === c.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+              }`}
+            >
+              {c.label}
+            </button>
+          ))}
         </div>
+        <label className="flex items-center gap-2 text-sm border-t pt-3">
+          <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
+          景品ごとに個別のテンプレートを設定する(通常は不要です)
+        </label>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-6 space-y-4">
+        <h2 className="font-semibold">② 景品リスト</h2>
 
         <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.id} className="space-y-2 border rounded-lg p-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  placeholder="景品名（例: 1等）"
-                  value={row.label}
-                  onChange={(e) => updateRow(row.id, { label: e.target.value })}
-                  className="input flex-1 min-w-[8rem]"
-                />
-                <input
-                  placeholder="個数"
-                  type="number"
-                  min={0}
-                  value={row.quantity}
-                  onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
-                  className="input w-24"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeRow(row.id)}
-                  className="text-xs text-red-600 hover:underline"
-                >
-                  削除
-                </button>
+          {rows.map((row) => {
+            const preview = row.objectSource === "preset" ? presets.find((p) => p.id === row.presetObjectId) : null;
+            const previewUrl = preview?.thumbnail_url || preview?.model_url || row.customModelUrl || "";
+            return (
+              <div key={row.id} className="space-y-2 border rounded-lg p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    placeholder="景品名（例: 1等）"
+                    value={row.label}
+                    onChange={(e) => updateLabel(row.id, e.target.value)}
+                    className="input flex-1 min-w-[8rem]"
+                  />
+                  <input
+                    placeholder="個数"
+                    type="number"
+                    min={0}
+                    value={row.quantity}
+                    onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+                    className="input w-24"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeRow(row.id)}
+                    className="text-xs text-red-600 hover:underline"
+                  >
+                    削除
+                  </button>
+                </div>
+                {advancedMode ? (
+                  <TemplatePicker
+                    presets={presets}
+                    objectSource={row.objectSource}
+                    presetObjectId={row.presetObjectId}
+                    customModelUrl={row.customModelUrl}
+                    uploading={row.uploading}
+                    onObjectSourceChange={(s) => updateRow(row.id, { objectSource: s })}
+                    onPresetObjectIdChange={(id) => updateRow(row.id, { presetObjectId: id })}
+                    onUploadFile={(file) => handleRowUpload(row.id, file)}
+                  />
+                ) : previewUrl ? (
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className="w-14 h-14 flex-shrink-0 overflow-hidden rounded">
+                      <PresetPreview url={previewUrl} />
+                    </div>
+                    <span className="truncate">{preview?.name || row.customModelUrl}</span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-amber-600">
+                    {selectedCategory
+                      ? "このテンプレートが見つかりませんでした。「景品ごとに個別のテンプレートを設定する」をオンにして選んでください。"
+                      : "上でカテゴリを選ぶとテンプレートが自動で設定されます。"}
+                  </p>
+                )}
               </div>
-              <TemplatePicker
-                presets={presets}
-                objectSource={row.objectSource}
-                presetObjectId={row.presetObjectId}
-                customModelUrl={row.customModelUrl}
-                uploading={row.uploading}
-                onObjectSourceChange={(s) => updateRow(row.id, { objectSource: s })}
-                onPresetObjectIdChange={(id) => updateRow(row.id, { presetObjectId: id })}
-                onUploadFile={(file) => handleRowUpload(row.id, file)}
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <button type="button" onClick={addRow} className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50">
