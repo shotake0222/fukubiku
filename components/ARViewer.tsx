@@ -84,6 +84,8 @@ export default function ARViewer({
   // AR.jsのカメラ映像とA-Frameのcanvasを閉じ込める描画用コンテナ
   const arViewportRef = useRef<HTMLDivElement | null>(null);
   const revealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // 診断用: マーカー(ターゲット)を何回検出したか
+  const foundCountRef = useRef(0);
   const cookieSetRef = useRef(false);
 
   // 新規に抽選が行われた(blockedでない)場合、クールダウン用のCookieを1回だけ発行する。
@@ -152,6 +154,7 @@ export default function ARViewer({
     if (!el) return;
     const eventName = displayType === "mindar" ? "targetFound" : "markerFound";
     const onFound = () => {
+      foundCountRef.current += 1;
       if (revealTimerRef.current) return;
       const delay =
         REVEAL_DELAY_MIN_MS + Math.random() * (REVEAL_DELAY_MAX_MS - REVEAL_DELAY_MIN_MS);
@@ -243,6 +246,81 @@ export default function ARViewer({
   //  - 何かに隠されていないか(z-index, 最前面の要素)
   // が分かるようにしている。
   const [diag, setDiag] = useState<string[]>([]);
+
+  // 画面に出す日時(旧実装のindex.htmlと同じ「YYYY年M月D日 H時M分 曜日」形式)。
+  // サーバーとクライアントで文字列がずれるとhydrationエラーになるため、
+  // マウント後にクライアント側で組み立てる。
+  const [nowLabel, setNowLabel] = useState("");
+  useEffect(() => {
+    const week = ["日", "月", "火", "水", "木", "金", "土"];
+    const render = () => {
+      const d = new Date();
+      setNowLabel(
+        `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ` +
+          `${d.getHours()}時${String(d.getMinutes()).padStart(2, "0")}分 ${week[d.getDay()]}曜日`
+      );
+    };
+    render();
+    const timer = setInterval(render, 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 撮影した画像(データURL)。表示中は画面全体にプレビューを出す。
+  const [snapshot, setSnapshot] = useState<string | null>(null);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+
+  // カメラ映像とARの描画(canvas)を1枚に合成して写真にする。
+  // 旧実装のスナップショット機能と同じ考え方だが、映像の縦横比が画面と違っても
+  // 切れ方が不自然にならないよう、画面と同じ「はみ出した分を切り取る」方式で合成する。
+  const takeSnapshot = () => {
+    setSnapshotError(null);
+    try {
+      const container = arViewportRef.current;
+      const video = (container?.querySelector("video") ??
+        document.querySelector("#arjs-video")) as HTMLVideoElement | null;
+      const arCanvas = document.querySelector(".a-canvas") as HTMLCanvasElement | null;
+      if (!video && !arCanvas) {
+        setSnapshotError("カメラ映像がまだ準備できていません。少し待ってからもう一度お試しください。");
+        return;
+      }
+
+      const width = Math.round(container?.clientWidth || window.innerWidth);
+      const height = Math.round(container?.clientHeight || window.innerHeight);
+      const out = document.createElement("canvas");
+      out.width = width;
+      out.height = height;
+      const ctx = out.getContext("2d");
+      if (!ctx) {
+        setSnapshotError("画像の生成に失敗しました。");
+        return;
+      }
+
+      if (video && video.videoWidth > 0) {
+        const videoRatio = video.videoWidth / video.videoHeight;
+        const canvasRatio = width / height;
+        let drawW: number, drawH: number, offsetX: number, offsetY: number;
+        if (videoRatio > canvasRatio) {
+          drawH = height;
+          drawW = height * videoRatio;
+          offsetX = (width - drawW) / 2;
+          offsetY = 0;
+        } else {
+          drawW = width;
+          drawH = width / videoRatio;
+          offsetX = 0;
+          offsetY = (height - drawH) / 2;
+        }
+        ctx.drawImage(video, offsetX, offsetY, drawW, drawH);
+      }
+      if (arCanvas) {
+        ctx.drawImage(arCanvas, 0, 0, width, height);
+      }
+      setSnapshot(out.toDataURL("image/png"));
+    } catch (e: any) {
+      console.error("[ARViewer] 撮影に失敗:", e);
+      setSnapshotError(`撮影に失敗しました: ${e?.message ?? e}`);
+    }
+  };
   useEffect(() => {
     if (!debug) return;
     const collect = () => {
@@ -270,6 +348,21 @@ export default function ARViewer({
       } else {
         lines.push("canvas: なし");
       }
+      // オブジェクト側の状態(スマホで「カメラは映るがオブジェクトが出ない」の切り分け用)
+      lines.push(`マーカー検出=${foundCountRef.current}回 結果表示=${revealed}`);
+      const modelEl = document.querySelector("[gltf-model]") as any;
+      if (!modelEl) {
+        lines.push("model: エンティティ無し");
+      } else {
+        const obj = modelEl.object3D;
+        const loaded = !!obj && obj.children.length > 0;
+        lines.push(
+          `model: 読込=${loaded ? "済" : "まだ"} visible=${modelEl.getAttribute("visible")}` +
+            ` scale=${modelEl.getAttribute("scale") ?? "-"} rot=${modelEl.getAttribute("rotation") ?? "-"}`
+        );
+      }
+      lines.push(`body style=${document.body.getAttribute("style") || "(なし)"}`);
+
       const top = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
       lines.push(`中央の最前面: ${top ? `${top.tagName}.${(top.className || "").toString().slice(0, 24)}` : "-"}`);
       lines.push(`window ${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`);
@@ -278,7 +371,7 @@ export default function ARViewer({
     collect();
     const t = setInterval(collect, 1000);
     return () => clearInterval(t);
-  }, [debug, ready, loadError]);
+  }, [debug, ready, loadError, revealed]);
 
   if (blocked) {
     return (
@@ -328,6 +421,60 @@ export default function ARViewer({
         </div>
       )}
 
+      {/* 日時表示(旧実装と同じ位置・体裁)。撮影した写真にも写り込むよう常時表示する。 */}
+      {ready && !debug && nowLabel && (
+        <div
+          className="absolute top-5 left-0 w-full px-3 text-center z-20 pointer-events-none text-[#2196F3] font-bold text-[18px]"
+          style={{ textShadow: "1px 1px 2px rgba(255,255,255,0.8)" }}
+        >
+          {nowLabel}
+        </div>
+      )}
+
+      {/* 撮影した写真のプレビュー */}
+      {snapshot && (
+        <div className="absolute inset-0 z-40 bg-black/85 flex flex-col items-center justify-center gap-4 p-4">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={snapshot} alt="撮影した写真" className="max-w-full max-h-[75%] object-contain rounded-lg" />
+          <div className="flex gap-3">
+            <a
+              href={snapshot}
+              download={`fukubiku_${Date.now()}.png`}
+              className="px-5 py-3 rounded-full bg-white text-slate-900 text-sm font-bold shadow-lg"
+            >
+              保存する
+            </a>
+            <button
+              type="button"
+              onClick={() => setSnapshot(null)}
+              className="px-5 py-3 rounded-full border border-white/60 text-white text-sm font-bold"
+            >
+              閉じる
+            </button>
+          </div>
+          <p className="text-white/60 text-xs text-center">
+            うまく保存できない場合は、写真を長押しして「画像を保存」からも保存できます。
+          </p>
+        </div>
+      )}
+
+      {/* 撮影ボタン */}
+      {ready && !snapshot && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 pb-8 pt-4 flex flex-col items-center gap-2">
+          {snapshotError && (
+            <p className="text-white text-xs bg-black/70 rounded px-3 py-1 mx-4 text-center">{snapshotError}</p>
+          )}
+          <button
+            type="button"
+            onClick={takeSnapshot}
+            aria-label="写真を撮る"
+            className="w-16 h-16 rounded-full bg-white/95 shadow-2xl border-4 border-white/60 flex items-center justify-center active:scale-95 transition-transform"
+          >
+            <span className="block w-11 h-11 rounded-full border-[3px] border-slate-800" />
+          </button>
+        </div>
+      )}
+
       {ready && displayType === "mindar" && (
         <a-scene
           mindar-image={`imageTargetSrc: ${mindFileUrl}; autoStart: true; uiScanning: yes; uiLoading: yes;`}
@@ -365,7 +512,9 @@ export default function ARViewer({
           // 不要。スマホでのホワイトアウトの候補としても無効化しておく。
           device-orientation-permission-ui="enabled: false"
           arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; patternRatio: 0.9; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
-          renderer="alpha: true; antialias: true; logarithmicDepthBuffer: true;"
+          // preserveDrawingBuffer: 描画後もWebGLのバッファを保持する指定。
+          // これが無いと、撮影時にcanvasを読み出しても中身が空になることがある。
+          renderer="alpha: true; antialias: true; preserveDrawingBuffer: true; logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
             <ObjectEntity
