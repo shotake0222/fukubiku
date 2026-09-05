@@ -96,6 +96,9 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
         }
         await Promise.all(tasks);
       } catch (e: any) {
+        // 原因調査のため、コンソールにも実際のエラー内容を残しておく
+        // (画面には簡潔な案内文だけを出し、詳細は下に小さく併記する)。
+        console.error("[ARViewer] スクリプト読み込みエラー:", e);
         if (!cancelled) setLoadError(e?.message ?? String(e));
       }
     }
@@ -124,6 +127,7 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
       {loadError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 text-white text-sm px-6 text-center z-20">
           <p>読み込みに失敗しました。電波状況の良い場所でもう一度お試しください。</p>
+          <p className="text-xs text-white/50 break-all">{loadError}</p>
           <button
             type="button"
             onClick={() => window.location.reload()}

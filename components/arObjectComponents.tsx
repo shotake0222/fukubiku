@@ -18,8 +18,19 @@ export const MINDAR_FACE_AFRAME_SRC =
   "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js";
 // .glbに埋め込まれたアニメーション(回転・拡縮・上下移動などのキーフレーム)を再生するために必要。
 // gltf-model単体では埋め込みアニメーションは自動再生されないため、この拡張コンポーネントを読み込む。
+//
+// 以前は "aframe-extras@7"(メジャーバージョンを固定しないフローティング指定)+
+// 機能別に分割された "aframe-extras.animation-mixer.min.js" を読み込んでいたが、
+// aframe-extrasの最新7.x(7.7.0時点)ではdist配下のファイル構成が変わり、この
+// animation-mixer単体バンドルが削除されて404を返すようになっていた
+// (実機で「読み込みに失敗しました」エラーになる不具合として発覚。しばらくの間、
+// 気づかれないまま本番で.glbのアニメーション再生に影響していた可能性がある)。
+// 同様の「フローティング指定のCDN URLが将来のリリースでファイル構成ごと変わり、
+// ある日突然404になる」事故を防ぐため、具体的なバージョンに固定した上で、
+// animation-mixerコンポーネントを含むことを確認済みの統合バンドル
+// (aframe-extras.min.js、controls/loaders/misc/animation-mixer等をすべて含む)を使う。
 export const AFRAME_EXTRAS_SRC =
-  "https://cdn.jsdelivr.net/npm/aframe-extras@7/dist/aframe-extras.animation-mixer.min.js";
+  "https://cdn.jsdelivr.net/npm/aframe-extras@7.7.0/dist/aframe-extras.min.js";
 
 // スクリプトの読み込み完了(またはエラー/タイムアウト)を待つ。
 // 以前はA-Frame本体/aframe-extras/AR.js(またはMindAR)をnext/scriptの
