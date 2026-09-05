@@ -38,6 +38,7 @@ export default function ARViewer({
   scale,
   rotation,
   position,
+  thresholdMode = 2,
   debug = false,
   category,
   hash,
@@ -60,6 +61,9 @@ export default function ARViewer({
   /** 表示オブジェクトの位置(A-Frameのposition属性値、例: "0 0 -0.3")。
    * マーカーに対する上下左右・奥行きの微調整に使う。 */
   position?: string | null;
+  /** ARToolKitの二値化しきい値モード(0=手動/1=中央値/2=大津/3=適応的/4=ブラケット)。
+   * 照明ムラやグレアに弱い場合の調整用。URLの ?thresh= で上書きできる。 */
+  thresholdMode?: number;
   /** URLに ?debug=1 が付いている場合に、カメラ映像や要素の状態を画面上に表示する。
    * 実機(特にスマホ)で「真っ暗で何も映らない」原因を切り分けるための診断用。 */
   debug?: boolean;
@@ -246,6 +250,43 @@ export default function ARViewer({
       document.body.classList.remove("ar-active");
     };
   }, [ready, displayType]);
+
+  // ARToolKitの二値化(しきい値)モードを設定する。
+  // 既定は固定しきい値で、印刷物の照り返し(グレア)や照明ムラがあると
+  // 黒枠を安定して拾えず「正面からだと反応しないのに斜めだと反応する」
+  // といった不安定さが出る。フレームごとに最適なしきい値を計算するモードに
+  // 切り替えて、明るさのばらつきに強くする。
+  //   0=手動 1=中央値 2=大津の手法 3=適応的 4=ブラケット
+  // 既定は2(大津)。端末で試したい場合は ?thresh=3 のように上書きできる。
+  useEffect(() => {
+    if (!ready || displayType !== "aframe") return;
+    let done = false;
+    const applyThreshold = () => {
+      if (done) return;
+      const scene = document.querySelector("a-scene") as any;
+      const sys = scene?.systems?.arjs;
+      const controller = (sys?._arSession ?? sys?.arSession)?.arContext?.arController;
+      if (!controller?.setThresholdMode) return;
+      try {
+        controller.setThresholdMode(thresholdMode);
+        done = true;
+        console.log("[ARViewer] しきい値モードを設定:", thresholdMode);
+      } catch (e) {
+        console.warn("[ARViewer] しきい値モードの設定に失敗:", e);
+      }
+    };
+    applyThreshold();
+    const timer = setInterval(() => {
+      applyThreshold();
+      if (done) clearInterval(timer);
+    }, 500);
+    // 初期化に時間がかかる端末もあるので、一定時間で諦める
+    const stop = setTimeout(() => clearInterval(timer), 15000);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(stop);
+    };
+  }, [ready, displayType, thresholdMode]);
 
   // ?debug=1 のときだけ、カメラ映像/canvasの状態を定期的に集めて画面に出す。
   // スマホをPCに繋がなくても、画面を見るだけで

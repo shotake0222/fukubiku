@@ -39,6 +39,16 @@
     pointer-events: none;
   }
   #status b { color: #fff; }
+  #ctrl {
+    position: fixed; left: 0; right: 0; bottom: 64px; z-index: 9999;
+    text-align: center; padding: 8px; background: rgba(0,0,0,.6);
+    font: 13px/2 sans-serif; color: #fff;
+  }
+  #ctrl a {
+    display: inline-block; margin: 2px 3px; padding: 5px 9px;
+    background: #fff; color: #111; border-radius: 999px; text-decoration: none;
+  }
+  #ctrl a.on { background: #2196F3; color: #fff; }
   #big {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 9999;
     text-align: center; padding: 14px 10px 24px;
@@ -54,27 +64,77 @@
 <body>
 <div id="status">読み込み中...</div>
 <div id="big">マーカーにカメラを向けてください</div>
+<div id="ctrl">
+  <div>マーカー:
+    <a id="mk-v1">現行(枠4%)</a>
+    <a id="mk-v2">新版(枠25%)</a>
+  </div>
+  <div>しきい値:
+    <a data-th="0">0手動</a><a data-th="1">1中央値</a><a data-th="2">2大津</a>
+    <a data-th="3">3適応</a><a data-th="4">4ブラケット</a>
+  </div>
+</div>
 
-<a-scene
-  embedded
-  vr-mode-ui="enabled: false"
-  device-orientation-permission-ui="enabled: false"
-  arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat;"
-  renderer="alpha: true;">
-
-  <a-marker id="mk" preset="custom" type="pattern" url="/markers/patternkuji.patt">
-    <!-- 1) 依存の少ない素のボックス。これが出れば描画は生きている -->
-    <a-box position="0 0 0" scale="0.6 0.6 0.6" material="color: #ff3355"></a-box>
-    <!-- 2) 実際のプリセット.glb。ボックスは出るがこれが出ない場合はモデル側の問題 -->
-    <a-entity id="mdl"
-      gltf-model="url(/presets/garagara/garagara_atari_3d.glb)"
-      rotation="-90 0 0" scale="1 1 1"></a-entity>
-  </a-marker>
-
-  <a-entity camera></a-entity>
-</a-scene>
+<div id="scene-holder"></div>
 
 <script>
+  // ---- 設定(URLパラメータ) ----
+  var P = new URLSearchParams(location.search);
+  var MK = P.get('marker') === 'v2' ? 'v2' : 'v1';
+  var TH = /^[0-4]$/.test(P.get('thresh') || '') ? Number(P.get('thresh')) : 2;
+  var MARKERS = {
+    v1: { url: '/markers/patternkuji.patt', ratio: 0.9 },
+    v2: { url: '/markers/patternkuji_v2.patt', ratio: 0.5 }
+  };
+  var cfg = MARKERS[MK];
+
+  // 切り替えリンクの設定(タップするとリロードして反映)
+  function link(q) {
+    var s = new URLSearchParams(location.search);
+    Object.keys(q).forEach(function (k) { s.set(k, q[k]); });
+    return location.pathname + '?' + s.toString();
+  }
+  document.getElementById('mk-v1').href = link({ marker: 'v1' });
+  document.getElementById('mk-v2').href = link({ marker: 'v2' });
+  document.getElementById('mk-' + MK).className = 'on';
+  Array.prototype.forEach.call(document.querySelectorAll('#ctrl a[data-th]'), function (a) {
+    a.href = link({ thresh: a.getAttribute('data-th') });
+    if (Number(a.getAttribute('data-th')) === TH) a.className = 'on';
+  });
+
+  // ---- シーンを組み立てる ----
+  var scene = document.createElement('a-scene');
+  scene.setAttribute('embedded', '');
+  scene.setAttribute('vr-mode-ui', 'enabled: false');
+  scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+  scene.setAttribute('arjs',
+    'sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best;' +
+    ' patternRatio: ' + cfg.ratio + '; cameraParametersUrl: /vendor/camera_para.dat; maxDetectionRate: 30;');
+  scene.setAttribute('renderer', 'alpha: true;');
+  scene.innerHTML =
+    '<a-marker id="mk" preset="custom" type="pattern" url="' + cfg.url + '"' +
+    ' smooth="true" smoothCount="10" smoothTolerance="0.01" smoothThreshold="5">' +
+      '<a-box position="0 0 0" scale="0.6 0.6 0.6" material="color: #ff3355"></a-box>' +
+      '<a-entity id="mdl" gltf-model="url(/presets/garagara/garagara_atari_3d.glb)"' +
+      ' rotation="-90 0 0" scale="1 1 1"></a-entity>' +
+    '</a-marker>' +
+    '<a-entity camera></a-entity>';
+  document.getElementById('scene-holder').appendChild(scene);
+
+  // ---- しきい値モードを適用 ----
+  var threshApplied = '未適用';
+  var thTimer = setInterval(function () {
+    var sys = scene.systems && scene.systems.arjs;
+    var ctl = sys && (sys._arSession || sys.arSession) && (sys._arSession || sys.arSession).arContext
+      ? ((sys._arSession || sys.arSession).arContext.arController) : null;
+    if (ctl && ctl.setThresholdMode) {
+      try { ctl.setThresholdMode(TH); threshApplied = '適用済(' + TH + ')'; }
+      catch (e) { threshApplied = '失敗 ' + e; }
+      clearInterval(thTimer);
+    }
+  }, 400);
+  setTimeout(function () { clearInterval(thTimer); }, 15000);
+
   var found = 0, lost = 0, modelLoaded = false, modelError = "";
   // マーカー検出の要となるカメラパラメータを実際に取得できるか確認する
   var camParaStatus = '確認中...';
@@ -82,8 +142,8 @@
     .then(function (r) { return r.ok ? r.arrayBuffer() : Promise.reject(r.status); })
     .then(function (b) { camParaStatus = 'OK (' + b.byteLength + ' bytes)'; })
     .catch(function (e) { camParaStatus = '取得失敗 ' + e; });
-  var mk = document.getElementById('mk');
-  var mdl = document.getElementById('mdl');
+  var mk = scene.querySelector('#mk');
+  var mdl = scene.querySelector('#mdl');
   var big = document.getElementById('big');
 
   mk.addEventListener('markerFound', function () {
@@ -124,6 +184,8 @@
     s += line('マーカー', '検出 ' + found + '回 / ロスト ' + lost + '回');
     s += line('モデル', modelLoaded ? '読込済' : (modelError || 'まだ'));
     s += line('カメラパラメータ', camParaStatus);
+    s += line('使用マーカー', MK + ' (patternRatio ' + cfg.ratio + ')');
+    s += line('しきい値モード', TH + ' / ' + threshApplied);
     s += line('画面', window.innerWidth + 'x' + window.innerHeight + ' dpr=' + window.devicePixelRatio);
     s += line('body', document.body.getAttribute('style') || '(なし)');
     document.getElementById('status').innerHTML = s;
