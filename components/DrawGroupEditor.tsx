@@ -8,7 +8,7 @@ import { compileMindTarget } from "@/lib/mindCompiler";
 import type { DisplayType, DrawGroup, DrawGroupEntry, ObjectSource, PresetObject } from "@/lib/types";
 import { DEFAULT_TIER_WEIGHTS, PRESET_CATEGORIES } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { resolvePresetForTier } from "@/lib/presetMatch";
+import { categoryHasBothFormats, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -132,7 +132,7 @@ export default function DrawGroupEditor({
   // カテゴリボタンを押すと、現在の景品リストをそのカテゴリの定番の景品名一式に丸ごと
   // 置き換える(テンプレートも自動で再設定される)。カテゴリを間違えて作成した場合の
   // やり直し用。既存の行を個別に少し直したいだけなら「詳細設定」を使う。
-  function resetToCategory(category: string) {
+  function resetToCategory(category: string, format: FormatPref = null) {
     if (
       rows.some((r) => r.label || r.presetObjectId || r.customModelUrl) &&
       !confirm("現在の景品リストを、選んだカテゴリの定番リストで置き換えます。よろしいですか？")
@@ -145,7 +145,7 @@ export default function DrawGroupEditor({
     setRows(
       labels.map((label) => {
         const row = newRow(label);
-        const preset = resolvePresetForTier(presets, category, label);
+        const preset = resolvePresetForTier(presets, category, label, format);
         if (preset) row.presetObjectId = preset.id;
         return row;
       })
@@ -371,16 +371,35 @@ export default function DrawGroupEditor({
           (現在のリストは置き換わります)。確率だけを微調整したい場合はここは使わず、下のリストを直接編集してください。
         </p>
         <div className="flex flex-wrap gap-2">
-          {PRESET_CATEGORIES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => resetToCategory(c.value)}
-              className="text-xs px-3 py-1 rounded-full border hover:bg-slate-50"
-            >
-              {c.label}でやり直す
-            </button>
-          ))}
+          {PRESET_CATEGORIES.map((cat) =>
+            categoryHasBothFormats(presets, cat.value) ? (
+              <span key={cat.value} className="inline-flex rounded-full border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => resetToCategory(cat.value, "glb")}
+                  className="text-xs px-3 py-1 hover:bg-slate-50"
+                >
+                  {cat.label}（3Dオブジェクト）でやり直す
+                </button>
+                <button
+                  type="button"
+                  onClick={() => resetToCategory(cat.value, "mp4")}
+                  className="text-xs px-3 py-1 border-l hover:bg-slate-50"
+                >
+                  {cat.label}（MP4）でやり直す
+                </button>
+              </span>
+            ) : (
+              <button
+                key={cat.value}
+                type="button"
+                onClick={() => resetToCategory(cat.value)}
+                className="text-xs px-3 py-1 rounded-full border hover:bg-slate-50"
+              >
+                {cat.label}でやり直す
+              </button>
+            )
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />

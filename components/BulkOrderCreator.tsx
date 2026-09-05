@@ -8,7 +8,7 @@ import { compileMindTarget } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
 import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { resolvePresetForTier } from "@/lib/presetMatch";
+import { categoryHasBothFormats, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -71,6 +71,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   // 基本の流れ:「①カテゴリを1つ選ぶ → 景品ごとのテンプレートは自動で割り当てられる」。
   // 景品ごとに違うカテゴリを混ぜて使うことは通常ないため、行ごとの個別設定は折りたたんでおく。
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedFormat, setSelectedFormat] = useState<FormatPref>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()]);
@@ -94,12 +95,13 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  function selectCategory(category: string) {
+  function selectCategory(category: string, format: FormatPref = null) {
     setSelectedCategory(category);
+    setSelectedFormat(format);
     setRows(
       QUICK_FILL[category].map((label) => {
         const row = newRow(label);
-        const preset = resolvePresetForTier(presets, category, label);
+        const preset = resolvePresetForTier(presets, category, label, format);
         if (preset) row.presetObjectId = preset.id;
         return row;
       })
@@ -110,7 +112,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   function updateLabel(rowId: string, label: string) {
     const patch: Partial<Row> = { label };
     if (!advancedMode && selectedCategory) {
-      const preset = resolvePresetForTier(presets, selectedCategory, label);
+      const preset = resolvePresetForTier(presets, selectedCategory, label, selectedFormat);
       patch.presetObjectId = preset?.id ?? null;
       patch.objectSource = "preset";
     }
@@ -384,18 +386,45 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
           ここで1つ選ぶと景品ごとのテンプレートが自動で割り当てられます。
         </p>
         <div className="flex flex-wrap gap-2">
-          {PRESET_CATEGORIES.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              onClick={() => selectCategory(c.value)}
-              className={`text-xs px-3 py-1 rounded-full border ${
-                selectedCategory === c.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
-              }`}
-            >
-              {c.label}
-            </button>
-          ))}
+          {PRESET_CATEGORIES.map((cat) =>
+            categoryHasBothFormats(presets, cat.value) ? (
+              <span key={cat.value} className="inline-flex rounded-full border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => selectCategory(cat.value, "glb")}
+                  className={`text-xs px-3 py-1 ${
+                    selectedCategory === cat.value && selectedFormat === "glb"
+                      ? "bg-slate-900 text-white"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  {cat.label}（3Dオブジェクト）
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectCategory(cat.value, "mp4")}
+                  className={`text-xs px-3 py-1 border-l ${
+                    selectedCategory === cat.value && selectedFormat === "mp4"
+                      ? "bg-slate-900 text-white"
+                      : "hover:bg-slate-50"
+                  }`}
+                >
+                  {cat.label}（MP4）
+                </button>
+              </span>
+            ) : (
+              <button
+                key={cat.value}
+                type="button"
+                onClick={() => selectCategory(cat.value)}
+                className={`text-xs px-3 py-1 rounded-full border ${
+                  selectedCategory === cat.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+                }`}
+              >
+                {cat.label}
+              </button>
+            )
+          )}
         </div>
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
