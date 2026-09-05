@@ -136,16 +136,26 @@ export default function ARViewer({
 
   return (
     <div className="h-screen w-screen bg-black relative">
+      {/* aframe-extras・AR.js・MindARはいずれも「A-Frame本体(グローバルのAFRAME/THREE)が
+          既に読み込み済みであること」を前提にしたコードになっている。すべてを同時に
+          <Script>タグで並行読み込みすると、外部CDN(A-Frame本体)より同一オリジンの
+          ローカルファイル(AR.js)の方が先に読み込み完了してしまう回線環境(特にモバイル回線)で
+          「Cannot read properties of undefined (reading 'EventDispatcher')」のような
+          クラッシュが発生し、読み込み画面のまま固まってしまう不具合があった。
+          これを防ぐため、A-Frame本体の読み込み完了(aframeLoaded)を待ってから、
+          残りのスクリプトをDOMに追加するようにしている。 */}
       <Script src={AFRAME_SRC} strategy="afterInteractive" onLoad={() => setAframeLoaded(true)} />
-      <Script
-        src={AFRAME_EXTRAS_SRC}
-        strategy="afterInteractive"
-        onLoad={() => setExtrasLoaded(true)}
-      />
-      {displayType === "aframe" && (
+      {aframeLoaded && (
+        <Script
+          src={AFRAME_EXTRAS_SRC}
+          strategy="afterInteractive"
+          onLoad={() => setExtrasLoaded(true)}
+        />
+      )}
+      {aframeLoaded && displayType === "aframe" && (
         <Script src={ARJS_SRC} strategy="afterInteractive" onLoad={() => setEngineLoaded(true)} />
       )}
-      {displayType === "mindar" && (
+      {aframeLoaded && displayType === "mindar" && (
         <Script
           src={MINDAR_IMAGE_AFRAME_SRC}
           strategy="afterInteractive"
