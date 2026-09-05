@@ -6,3 +6,4 @@ out
 npm-install.log
 .DS_Store
 *.log
+tsconfig.tsbuildinfo
