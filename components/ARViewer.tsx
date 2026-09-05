@@ -159,6 +159,52 @@ export default function ARViewer({
     };
   }, []);
 
+  // AR.jsはカメラ映像の<video id="arjs-video">をz-index:-2でbody直下に置く。
+  // z-indexが負の要素は「ルート(body)の背景より手前・通常のコンテンツより奥」に
+  // 描画されるため、ビューア側で不透明な背景を敷くとカメラ映像が隠れてしまう
+  // (PCで画面が黒くなっていた原因)。背景はbodyに置くことで、映像が届かない
+  // 余白だけが黒くなり、映像自体は隠れないようにする。
+  useEffect(() => {
+    const prev = document.body.style.backgroundColor;
+    document.body.style.backgroundColor = "#000";
+    return () => {
+      document.body.style.backgroundColor = prev;
+    };
+  }, []);
+
+  // AR.js(A-Frameのarjsシステム)は、カメラ映像を画面全体で覆うために
+  // videoを「画面より大きいサイズ + 負のmargin」で配置し、同じサイズをA-Frameの
+  // canvasにもコピーして、映像と3D描画をピクセル単位で一致させる設計になっている。
+  // ところがA-Frame側のリサイズ処理が後からcanvasのサイズをビューポート相当に
+  // 戻してしまうため、canvasだけが小さいまま取り残され、
+  //  - 画面の端にcanvasが届かない帯ができる
+  //  - 3Dモデルの描画位置がカメラ映像に対してずれる
+  // という状態になっていた。videoのサイズをcanvasへ定期的に反映し直して、
+  // AR.jsが本来意図している「映像とcanvasが同じ大きさ」を維持する。
+  // (位置合わせのmarginはa-scene側に既に効いているので、canvas自身は0にする)
+  useEffect(() => {
+    if (!ready || displayType !== "aframe") return;
+    const sync = () => {
+      const video = document.querySelector("#arjs-video") as HTMLElement | null;
+      const canvas = document.querySelector(".a-canvas") as HTMLElement | null;
+      if (!video || !canvas || !video.style.width || !video.style.height) return;
+      if (canvas.style.width !== video.style.width || canvas.style.height !== video.style.height) {
+        canvas.style.width = video.style.width;
+        canvas.style.height = video.style.height;
+        canvas.style.marginLeft = "0px";
+        canvas.style.marginTop = "0px";
+      }
+    };
+    const timer = setInterval(sync, 300);
+    window.addEventListener("resize", sync);
+    window.addEventListener("orientationchange", sync);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener("resize", sync);
+      window.removeEventListener("orientationchange", sync);
+    };
+  }, [ready, displayType]);
+
   if (blocked) {
     return (
       <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white text-sm px-6 text-center">
@@ -175,8 +221,12 @@ export default function ARViewer({
     );
   }
 
+  // 読み込み中・エラー時は黒背景で覆ってよいが、AR表示中(ready)は透明にしておく。
+  // (不透明な背景を敷いたままだと、z-index:-2のカメラ映像が隠れてしまう)
+  const wrapperBg = ready && !loadError ? "" : "bg-black";
+
   return (
-    <div className="h-screen w-screen bg-black relative">
+    <div className={`h-screen w-screen relative ${wrapperBg}`}>
       {loadError && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-slate-900 text-white text-sm px-6 text-center z-20">
           <p>読み込みに失敗しました。電波状況の良い場所でもう一度お試しください。</p>
@@ -221,6 +271,11 @@ export default function ARViewer({
         <a-scene
           embedded
           vr-mode-ui="enabled: false"
+          // A-Frameは端末の向きによって全画面の案内モーダル(.a-orientation-modal、
+          // 背景#F4F4F4のほぼ白)を表示することがある。AR.jsはマーカー認識(画像処理)
+          // でトラッキングしており端末の向きセンサーを使わないため、この案内自体が
+          // 不要。スマホでのホワイトアウトの候補としても無効化しておく。
+          device-orientation-permission-ui="enabled: false"
           arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3; trackingMethod: best; patternRatio: 0.9; sourceWidth: 1280; sourceHeight: 960; displayWidth: 1280; displayHeight: 960;"
           renderer="logarithmicDepthBuffer: true;"
         >
