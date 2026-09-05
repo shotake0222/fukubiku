@@ -33,6 +33,7 @@ export default function ARViewer({
   modelUrl,
   mindFileUrl,
   markerUrl,
+  scale,
   category,
   hash,
   blocked = false,
@@ -44,6 +45,10 @@ export default function ARViewer({
   modelUrl: string | null;
   mindFileUrl: string | null;
   markerUrl?: string | null;
+  /** 表示オブジェクトの拡大率(A-Frameのscale属性値、例: "0.15 0.15 0.15")。
+   * 管理画面のプリセット登録時に設定した値がpreset_objects.scale経由で渡される。
+   * 未指定(null/undefined)の場合はObjectEntity側の既定値を使う。 */
+  scale?: string | null;
   /** fukubikuの固定カテゴリ(あみだ/ボックス/おみくじ/ダーツ/ガラガラ/スクラッチ/...)。
    * 焦らし演出をカテゴリ専用のものにするために使う。カスタムアップロード等ではnull。 */
   category?: string | null;
@@ -203,11 +208,11 @@ export default function ARViewer({
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0" ref={targetElRef}>
-            <ObjectEntity url={modelUrl} visible={revealed} loop={false} />
+            <ObjectEntity url={modelUrl} scale={scale} visible={revealed} loop={false} />
             {!revealed && isCategorySuspenseAvailable(category) && (
-              <CategorySuspenseEntity category={category} />
+              <CategorySuspenseEntity category={category} scale={scale} />
             )}
-            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity />}
+            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity scale={scale} />}
           </a-entity>
         </a-scene>
       )}
@@ -220,11 +225,11 @@ export default function ARViewer({
           renderer="logarithmicDepthBuffer: true;"
         >
           <a-marker type="pattern" url={marker} ref={targetElRef}>
-            <ObjectEntity url={modelUrl} visible={revealed} loop={false} />
+            <ObjectEntity url={modelUrl} scale={scale} visible={revealed} loop={false} />
             {!revealed && isCategorySuspenseAvailable(category) && (
-              <CategorySuspenseEntity category={category} />
+              <CategorySuspenseEntity category={category} scale={scale} />
             )}
-            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity />}
+            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity scale={scale} />}
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>

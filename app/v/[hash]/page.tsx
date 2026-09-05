@@ -40,6 +40,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
 
     let modelUrl: string | null = o.custom_model_url;
     let category: string | null = null;
+    let scale: string | null = null;
     if (o.object_source === "preset" && o.preset_object_id) {
       const { data: preset } = await supabase
         .from("preset_objects")
@@ -51,6 +52,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
       // 焦らし演出(結果が出るまでのプレースホルダー)をカテゴリ専用のものにするために使う。
       // カスタムアップロードのオブジェクト(fukubikuの固定カテゴリに属さない)ではnullのまま。
       category = p?.category ?? null;
+      scale = p?.scale ?? null;
     }
 
     return (
@@ -59,6 +61,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
         modelUrl={modelUrl}
         mindFileUrl={o.mind_file_url}
         category={category}
+        scale={scale}
       />
     );
   }
@@ -113,6 +116,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
 
   let modelUrl: string | null = chosen.custom_model_url;
   let category: string | null = null;
+  let scale: string | null = null;
   if (chosen.object_source === "preset" && chosen.preset_object_id) {
     const { data: preset } = await supabase
       .from("preset_objects")
@@ -122,6 +126,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
     const p = preset as PresetObject | null;
     modelUrl = p?.model_url ?? null;
     category = p?.category ?? null;
+    scale = p?.scale ?? null;
   }
 
   return (
@@ -130,6 +135,7 @@ export default async function ViewerPage({ params }: { params: { hash: string } 
       modelUrl={modelUrl}
       mindFileUrl={g.mind_file_url}
       category={category}
+      scale={scale}
       hash={params.hash}
       cooldownHours={cooldownHours}
     />

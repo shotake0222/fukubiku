@@ -10,6 +10,12 @@
 // - SuspenseEntity: 結果(ObjectEntity)が表示されるまでの「焦らし」演出用プレースホルダー。
 //   何の絵柄か分からないガチャカプセル風のオブジェクトを高速回転+上下バウンドさせる。
 
+// .glbモデルにscale未指定(プリセット未設定)の場合の既定拡大率。
+// 以前は0.05だったが、実機で「小さすぎて判別できない」との声を受けて引き上げた。
+// 個別のプリセットで大きさが合わない場合は、管理画面(表示オブジェクト管理)の
+// サイズ欄からこの既定値を上書きできる。
+export const DEFAULT_MODEL_SCALE = "0.15 0.15 0.15";
+
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
 export const MINDAR_IMAGE_AFRAME_SRC =
@@ -251,7 +257,7 @@ export function ObjectEntity({
     <a-entity
       gltf-model={`url(${url})`}
       position={position === "0 0.6 0" ? "0 0 0" : position}
-      scale={scale || "0.05 0.05 0.05"}
+      scale={scale || DEFAULT_MODEL_SCALE}
       rotation={rotationY ? rotation : undefined}
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
@@ -303,7 +309,7 @@ export function SuspenseEntity({
 }) {
   const entityPosition = position === "0 0.6 0" ? "0 0 0" : position;
   return (
-    <a-entity position={entityPosition} scale={scale || "0.05 0.05 0.05"}>
+    <a-entity position={entityPosition} scale={scale || DEFAULT_MODEL_SCALE}>
       <a-entity
         animation__spin="property: rotation; to: 0 360 0; loop: true; dur: 700; easing: linear"
         animation__bob="property: position; dir: alternate; loop: true; dur: 500; easing: easeInOutSine; to: 0 0.18 0"

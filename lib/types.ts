@@ -61,6 +61,9 @@ export interface PresetObject {
   group_type: AttendPresetGroup | null;
   model_url: string;
   thumbnail_url: string | null;
+  /** 表示オブジェクトの拡大率(A-Frameのscale属性値、例: "0.15 0.15 0.15")。
+   * 管理画面(表示オブジェクト管理)から設定する。未設定(null)ならアプリ側の既定値を使う。 */
+  scale: string | null;
   service: ServiceTag | null;
   created_at: string;
 }

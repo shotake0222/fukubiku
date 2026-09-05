@@ -6,6 +6,17 @@ html, body {
   height: 100%;
 }
 
+/* AR.js/A-Frameのビューア(/v/[hash], /a/[hash])向け。
+   レガシー実装(index.html)には ".a-enter-vr { display: none !important; }" が
+   あったが、Next.js移行後のCSSにはこれが無かった。vr-mode-ui="enabled: false" で
+   通常はEnter VR/ARボタンは出ないはずだが、A-Frameの読み込みタイミングによっては
+   一瞬ボタン(や、その裏にある不透明な背景)が挟まることがあるため、念のため
+   レガシー実装と同じくCSSでも強制的に非表示にしておく。 */
+.a-enter-vr,
+.a-enter-ar {
+  display: none !important;
+}
+
 @layer components {
   .input {
     @apply w-full border rounded-lg px-3 py-2 text-sm bg-white;

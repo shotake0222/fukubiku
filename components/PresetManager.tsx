@@ -62,8 +62,10 @@ export default function PresetManager({
   const [freeCategory, setFreeCategory] = useState("");
   const [modelFile, setModelFile] = useState<File | null>(null);
   const [thumbFile, setThumbFile] = useState<File | null>(null);
+  const [scale, setScale] = useState("");
   const [saving, setSaving] = useState(false);
   const [replacingId, setReplacingId] = useState<string | null>(null);
+  const [savingScaleId, setSavingScaleId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const categorySuggestions = useMemo(() => {
@@ -123,6 +125,7 @@ export default function PresetManager({
           group_type: groups ? groupType || null : null,
           model_url: modelUrl,
           thumbnail_url: thumbUrl,
+          scale: scale.trim() || null,
           service,
         })
         .select("*")
@@ -135,6 +138,7 @@ export default function PresetManager({
       setThumbFile(null);
       setCustomCategory("");
       setFreeCategory("");
+      setScale("");
     } catch (err: any) {
       setError(`登録に失敗しました: ${err.message ?? err}`);
     } finally {
@@ -159,6 +163,25 @@ export default function PresetManager({
       setError(`差し替えに失敗しました: ${err.message ?? err}`);
     } finally {
       setReplacingId(null);
+    }
+  }
+
+  async function handleScaleSave(preset: PresetObject, value: string) {
+    const next = value.trim() || null;
+    if (next === preset.scale) return;
+    setSavingScaleId(preset.id);
+    setError(null);
+    try {
+      const { error } = await supabase
+        .from("preset_objects")
+        .update({ scale: next })
+        .eq("id", preset.id);
+      if (error) throw error;
+      setPresets((prev) => prev.map((p) => (p.id === preset.id ? { ...p, scale: next } : p)));
+    } catch (err: any) {
+      setError(`サイズの保存に失敗しました: ${err.message ?? err}`);
+    } finally {
+      setSavingScaleId(null);
     }
   }
 
@@ -211,6 +234,17 @@ export default function PresetManager({
       <div key={p.id} className="border rounded-lg p-2 text-xs space-y-2 bg-white">
         <ObjectPreview url={p.thumbnail_url || p.model_url} />
         <div className="truncate font-medium">{p.name}</div>
+        <label className="block space-y-0.5">
+          <span className="text-[10px] text-slate-400">サイズ(scale)</span>
+          <input
+            key={p.scale ?? ""}
+            defaultValue={p.scale ?? ""}
+            placeholder="既定(0.15 0.15 0.15)"
+            disabled={savingScaleId === p.id}
+            onBlur={(e) => handleScaleSave(p, e.target.value)}
+            className="input !py-1 !text-[11px]"
+          />
+        </label>
         <div className="flex items-center justify-between gap-1">
           <label className="text-blue-600 hover:underline cursor-pointer">
             {replacingId === p.id ? "差し替え中..." : "ファイル差し替え"}
@@ -337,6 +371,20 @@ export default function PresetManager({
         <label className="space-y-1 block">
           <span className="text-sm font-medium">サムネイル画像（任意・省略時は本体を使用）</span>
           <input type="file" accept="image/*" onChange={(e) => setThumbFile(e.target.files?.[0] ?? null)} />
+        </label>
+        <label className="space-y-1 block">
+          <span className="text-sm font-medium">
+            表示サイズ（任意・A-Frameのscale値。例: 0.15 0.15 0.15）
+          </span>
+          <input
+            value={scale}
+            onChange={(e) => setScale(e.target.value)}
+            placeholder="未入力の場合は既定サイズ（0.15 0.15 0.15）"
+            className="input"
+          />
+          <span className="block text-[11px] text-slate-400">
+            数値が大きいほどARで表示される3Dモデルが大きくなります。登録後も一覧から調整できます。
+          </span>
         </label>
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button
