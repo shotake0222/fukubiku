@@ -8,7 +8,7 @@ import { compileMindTarget } from "@/lib/mindCompiler";
 import type { DisplayType, DrawGroup, DrawGroupEntry, ObjectSource, PresetObject } from "@/lib/types";
 import { DEFAULT_TIER_WEIGHTS, PRESET_CATEGORIES } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { categoryHasBothFormats, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
+import { categoryHasBothFormats, flatFormatLabel, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -383,10 +383,10 @@ export default function DrawGroupEditor({
                 </button>
                 <button
                   type="button"
-                  onClick={() => resetToCategory(cat.value, "mp4")}
+                  onClick={() => resetToCategory(cat.value, "flat")}
                   className="text-xs px-3 py-1 border-l hover:bg-slate-50"
                 >
-                  {cat.label}（MP4）でやり直す
+                  {cat.label}（{flatFormatLabel(presets, cat.value)}）でやり直す
                 </button>
               </span>
             ) : (

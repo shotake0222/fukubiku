@@ -14,7 +14,7 @@ import {
   type PresetObject,
 } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { categoryHasBothFormats, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
+import { categoryHasBothFormats, flatFormatLabel, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 
 const ASSET_BUCKET = "assets";
 
@@ -381,14 +381,14 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectCategory(cat.value, "mp4")}
+                  onClick={() => selectCategory(cat.value, "flat")}
                   className={`text-xs px-3 py-1 border-l ${
-                    selectedCategory === cat.value && selectedFormat === "mp4"
+                    selectedCategory === cat.value && selectedFormat === "flat"
                       ? "bg-slate-900 text-white"
                       : "hover:bg-slate-50"
                   }`}
                 >
-                  {cat.label}（MP4）
+                  {cat.label}（{flatFormatLabel(presets, cat.value)}）
                 </button>
               </span>
             ) : (
