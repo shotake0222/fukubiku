@@ -288,7 +288,20 @@ export default function ARViewer({
     try {
       const video = (document.querySelector("#arjs-video") ??
         document.querySelector("video")) as HTMLVideoElement | null;
-      const arCanvas = document.querySelector(".a-canvas") as HTMLCanvasElement | null;
+      // AR部分の描画は、A-Frame内蔵のscreenshotコンポーネントで別canvasに
+      // 描き直して取得する。表示中のcanvasを直接読むには preserveDrawingBuffer が
+      // 必要になるが、その指定はモバイルで表示不具合を起こすため使わない。
+      const sceneEl = document.querySelector("a-scene") as any;
+      let arCanvas: HTMLCanvasElement | null = null;
+      try {
+        arCanvas = sceneEl?.components?.screenshot?.getCanvas?.("perspective") ?? null;
+      } catch {
+        arCanvas = null;
+      }
+      if (!arCanvas) {
+        // 取得できない場合は表示中のcanvasを試す(環境によっては空になることがある)
+        arCanvas = document.querySelector(".a-canvas") as HTMLCanvasElement | null;
+      }
       if (!video && !arCanvas) {
         setSnapshotError("カメラ映像がまだ準備できていません。少し待ってからもう一度お試しください。");
         return;
@@ -554,12 +567,13 @@ export default function ARViewer({
           // 回線やDNS、拡張機能の影響を受けるため端末差が出やすい(スマホだけ動かない典型)。
           // ファイルは176バイトと小さいので同一オリジンに同梱して外部依存をなくす。
           arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat; maxDetectionRate: 30;"
-          // preserveDrawingBuffer: 描画後もWebGLのバッファを保持する指定。
-          // これが無いと、撮影時にcanvasを読み出しても中身が空になることがある。
-          // logarithmicDepthBuffer はGPUの拡張機能に依存し、端末によっては
-          // 描画されない原因になりうるため外した(旧実装でも未指定)。
-          // preserveDrawingBuffer は撮影機能に必要。
-          renderer="alpha: true; preserveDrawingBuffer: true;"
+          // 実機のスマホで確実に動いた単体テストページ(ar-test.html)と同じ指定にする。
+          // preserveDrawingBuffer は撮影のために一度追加したが、モバイルのGPUでは
+          // canvasの合成のされ方が変わり、透過するはずのcanvasが不透明になって
+          // カメラ映像を覆ってしまうことがある(本番のスマホでカメラが映らなくなった)。
+          // 撮影はA-Frame内蔵のscreenshotコンポーネントで行えばこの指定は不要
+          // (旧実装のindex.htmlも同じ方法を使っていた)。
+          renderer="alpha: true;"
         >
           {/* preset="custom" は旧実装と同じ指定。省略時の既定プリセットに
               引きずられないよう、独自パターンを使うことを明示しておく。 */}
