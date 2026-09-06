@@ -24,6 +24,23 @@ export default async function AttendProjectsPage() {
     .select("*")
     .order("created_at", { ascending: false });
 
+  // 「URLはどこで作るのか」が一覧から分かるよう、案件ごとの発行URL数を出す。
+  const projectList = (projects as AttendProject[] | null) ?? [];
+  const { data: items } = projectList.length
+    ? await supabase
+        .from("attend_items")
+        .select("id, project_id")
+        .in(
+          "project_id",
+          projectList.map((p) => p.id)
+        )
+    : { data: [] as { id: string; project_id: string }[] };
+
+  const urlCount = new Map<string, number>();
+  for (const it of (items as { id: string; project_id: string }[] | null) ?? []) {
+    urlCount.set(it.project_id, (urlCount.get(it.project_id) ?? 0) + 1);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -44,6 +61,7 @@ export default async function AttendProjectsPage() {
             <tr>
               <th className="px-4 py-2">クライアント名</th>
               <th className="px-4 py-2">プラン</th>
+              <th className="px-4 py-2">発行URL</th>
               <th className="px-4 py-2">NFCタグ進捗</th>
               <th className="px-4 py-2">納期</th>
               <th className="px-4 py-2">状態</th>
@@ -51,10 +69,11 @@ export default async function AttendProjectsPage() {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {(projects as AttendProject[] | null)?.map((p) => (
+            {projectList.map((p) => (
               <tr key={p.id}>
                 <td className="px-4 py-2 font-medium">{p.client_name}</td>
                 <td className="px-4 py-2">{ATTEND_PLAN_LIMITS[p.plan].label}</td>
+                <td className="px-4 py-2">{urlCount.get(p.id) ?? 0}本</td>
                 <td className="px-4 py-2">
                   {p.nfc_tag_total ? `${p.nfc_tag_used} / ${p.nfc_tag_total}` : "-"}
                 </td>
@@ -66,14 +85,14 @@ export default async function AttendProjectsPage() {
                 </td>
                 <td className="px-4 py-2 text-right">
                   <Link href={`/admin/attend/projects/${p.id}`} className="text-blue-600 hover:underline">
-                    編集
+                    URLと発火条件を管理
                   </Link>
                 </td>
               </tr>
             ))}
-            {projects && projects.length === 0 && (
+            {projectList.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                <td colSpan={7} className="px-4 py-8 text-center text-slate-400">
                   案件がまだありません
                 </td>
               </tr>

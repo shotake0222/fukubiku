@@ -423,15 +423,40 @@ function TriggerCard({
   return (
     <div className="border rounded-xl p-4 space-y-4 bg-white">
 
-      <div className="flex items-center justify-between gap-3">
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="発火条件のラベル（例: 本殿前GPS）"
-          className="input font-medium flex-1"
-        />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2 py-0.5 rounded-full text-[11px] bg-slate-900 text-white">
+              {ATTEND_DISPLAY_TYPES.find((t) => t.value === displayType)?.short ?? displayType}
+            </span>
+            {/* 今この発火条件が何で動くのか、開かなくても分かるようにする */}
+            <span className="text-[11px] text-slate-500">
+              {displayType === "gps"
+                ? gpsLat && gpsLng
+                  ? `${gpsLat}, ${gpsLng}（半径${gpsRadius || 20}m）`
+                  : "緯度経度が未設定です"
+                : displayType === "aframe"
+                  ? markerUrl
+                    ? "マーカー設定済み"
+                    : "既定マーカーを使用"
+                  : displayType === "mindar_image"
+                    ? mindFileUrl
+                      ? "画像コンパイル済み"
+                      : "画像が未設定です"
+                    : displayType === "nfc"
+                      ? "追加設定なし"
+                      : ""}
+            </span>
+          </div>
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="この発火条件の名前（例: 本殿前GPS）"
+            className="input font-medium w-full"
+          />
+        </div>
         <button type="button" onClick={handleDeleteTrigger} disabled={deleting} className="text-xs text-red-600 hover:underline whitespace-nowrap">
-          発火条件を削除
+          削除
         </button>
       </div>
 
@@ -731,12 +756,17 @@ export default function AttendItemEditor({
     router.refresh();
   }
 
-  async function handleAddTrigger() {
+  // 種類を選んでから追加する。
+  // 以前は常に "aframe"(マーカー)で作られるため、GPSを使いたい人は
+  // カードの中のラジオボタンに気づかないと緯度経度の入力欄にたどり着けなかった。
+  async function handleAddTrigger(displayType: AttendDisplayType) {
     setAddingTrigger(true);
     setError(null);
     const { error } = await supabase.from("attend_triggers").insert({
       item_id: item.id,
-      display_type: "aframe",
+      display_type: displayType,
+      // GPSは半径の既定値を入れておく(未入力のまま保存されるのを防ぐ)
+      gps_radius_m: displayType === "gps" ? 20 : null,
       sort_order: triggers.length,
     });
     setAddingTrigger(false);
@@ -757,8 +787,10 @@ export default function AttendItemEditor({
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-slate-400">案件: {project?.client_name}</p>
-          <h1 className="text-lg font-bold">アイテム編集</h1>
+          <p className="text-xs text-slate-400">
+            案件: {project?.client_name} ／ 発行URLの編集
+          </p>
+          <h1 className="text-lg font-bold">{name || "（名前未設定）"}</h1>
         </div>
         <select value={status} onChange={(e) => setStatus(e.target.value as AttendExperienceStatus)} className="text-xs border rounded-full px-3 py-1">
           {(Object.keys(statusLabel) as AttendExperienceStatus[]).map((s) => (
@@ -770,16 +802,21 @@ export default function AttendItemEditor({
       </div>
 
       <section className="bg-pink-50 border border-pink-200 rounded-xl p-4 space-y-2">
-        <h2 className="text-xs font-semibold text-pink-700">クライアント提供URL</h2>
+        <h2 className="text-xs font-semibold text-pink-700">クライアント提供URL（このURL専用のページです）</h2>
         <div className="flex items-center gap-2">
           <code className="text-sm bg-white rounded px-2 py-1 break-all border border-pink-100">{viewerUrl}</code>
           <button type="button" onClick={handleCopy} className="text-xs px-3 py-1.5 rounded-lg bg-pink-600 text-white hover:bg-pink-700 whitespace-nowrap">
             {copyOk ? "コピーしました" : "URLをコピー"}
           </button>
         </div>
+        <p className="text-xs text-pink-700/80 leading-relaxed">
+          URLはこのアイテムを作った時点で発行済みです。NFCタグやQRコードにはこのURLを書き込んでください。
+          別のURLが必要なときは、案件画面の「＋ URLを発行」から新しく作成します。
+        </p>
         {status !== "ready" && (
           <p className="text-xs text-amber-600">
-            発火条件を1つ以上設定し、それぞれにオブジェクトを配置してから状態を「公開準備完了」に切り替えてください。
+            まだ「下書き」です。発火条件を1つ以上設定してオブジェクトを配置したら、
+            右上の状態を「公開準備完了」に切り替えてください（URL自体は今でも開けます）。
           </p>
         )}
       </section>
@@ -801,19 +838,32 @@ export default function AttendItemEditor({
       </section>
 
       <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">発火条件（1アイテムに複数設定できます）</h2>
-          <button
-            onClick={handleAddTrigger}
-            disabled={addingTrigger}
-            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
-          >
-            {addingTrigger ? "追加中..." : "+ 発火条件を追加"}
-          </button>
+        <div>
+          <h2 className="font-semibold">発火条件（何をきっかけにARを出すか）</h2>
+          <p className="text-xs text-slate-500 mt-1">
+            1本のURLに何種類でも設定できます。例: 同じキーホルダーに「画像認識」と「GPS」の
+            両方を用意し、来訪者はどちらかを選んで開始できます。
+          </p>
         </div>
-        <p className="text-xs text-slate-500">
-          例: 同じキーホルダーに「画像トラッキング」と「GPS」の両方を用意し、来訪者はどちらかを選んでAR体験を開始できます。
-        </p>
+
+        <div className="bg-white rounded-xl shadow p-4 space-y-2">
+          <p className="text-xs font-medium text-slate-600">追加する発火条件を選んでください</p>
+          <div className="flex flex-wrap gap-2">
+            {ATTEND_DISPLAY_TYPES.map((t) => (
+              <button
+                key={t.value}
+                type="button"
+                onClick={() => handleAddTrigger(t.value)}
+                disabled={addingTrigger}
+                className="text-left border rounded-lg px-3 py-2 hover:bg-slate-50 disabled:opacity-50 min-w-[170px]"
+              >
+                <span className="block text-sm font-medium">＋ {t.short}</span>
+                <span className="block text-[10px] text-slate-500 mt-0.5">{t.hint}</span>
+              </button>
+            ))}
+          </div>
+          {addingTrigger && <p className="text-xs text-slate-500">追加中...</p>}
+        </div>
 
         {triggers.map((t) => (
           <TriggerCard
@@ -827,7 +877,9 @@ export default function AttendItemEditor({
           />
         ))}
         {triggers.length === 0 && (
-          <p className="text-sm text-slate-400 py-4 text-center">まだ発火条件がありません。「+ 発火条件を追加」から作成してください。</p>
+          <p className="text-sm text-slate-400 py-4 text-center">
+            まだ発火条件がありません。上のボタンから種類を選んで追加してください。
+          </p>
         )}
       </section>
 

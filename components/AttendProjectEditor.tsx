@@ -179,8 +179,9 @@ export default function AttendProjectEditor({
           <div>
             <h2 className="font-semibold">発行URL一覧</h2>
             <p className="text-xs text-slate-500 mt-1">
-              1つの案件で何本でもURLを発行できます。URLは「柄・グッズ・スポット」など、
-              配布する単位ごとに1本ずつ作ってください。
+              「＋ URLを発行」を押すと、その場でURLが1本発行されます。
+              柄・グッズ・スポットなど、配布する単位ごとに1本ずつ作ってください。
+              発火条件（NFC・GPS・画像認識・マーカー）は、発行したURLの編集画面で設定します。
             </p>
           </div>
           <button
@@ -246,24 +247,20 @@ export default function AttendProjectEditor({
                       </span>
                     </td>
                     <td className="py-3 pr-3">
-                      {it.status === "ready" ? (
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs break-all">{url}</code>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              navigator.clipboard?.writeText(url);
-                              setCopiedId(it.id);
-                              setTimeout(() => setCopiedId(null), 1500);
-                            }}
-                            className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50 shrink-0"
-                          >
-                            {copiedId === it.id ? "コピーしました" : "コピー"}
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-slate-400">公開準備完了にすると発行されます</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <code className="text-xs break-all">{url}</code>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard?.writeText(url);
+                            setCopiedId(it.id);
+                            setTimeout(() => setCopiedId(null), 1500);
+                          }}
+                          className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50 shrink-0"
+                        >
+                          {copiedId === it.id ? "コピーしました" : "コピー"}
+                        </button>
+                      </div>
                     </td>
                     <td className="py-3 text-right whitespace-nowrap">
                       <Link href={`/admin/attend/items/${it.id}`} className="text-blue-600 hover:underline">
