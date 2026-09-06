@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generateHash } from "@/lib/hash";
 import AttendProjectForm, { type AttendProjectFormValue } from "@/components/AttendProjectForm";
+import { attendDisplayTypeShort } from "@/lib/types";
 import type { AttendItem, AttendProject, AttendProjectStatus } from "@/lib/types";
 
 const itemStatusLabel: Record<string, string> = {
@@ -21,7 +22,18 @@ const projectStatusLabel: Record<AttendProjectStatus, string> = {
 
 export interface AttendItemWithTriggerCount extends AttendItem {
   trigger_count: number;
+  /** この発行URLがどの発火条件を持っているか(NFC/GPS/画像認識/マーカー/顔) */
+  trigger_types: string[];
 }
+
+// 発火条件の種類ごとに色を変え、一覧で見分けられるようにする。
+const TRIGGER_BADGE_CLASS: Record<string, string> = {
+  nfc: "bg-violet-100 text-violet-700",
+  gps: "bg-sky-100 text-sky-700",
+  mindar_image: "bg-amber-100 text-amber-700",
+  aframe: "bg-slate-200 text-slate-700",
+  mindar_face: "bg-rose-100 text-rose-700",
+};
 
 export default function AttendProjectEditor({
   project,
@@ -32,6 +44,8 @@ export default function AttendProjectEditor({
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
+
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [form, setForm] = useState<AttendProjectFormValue>({
     client_name: project.client_name,
@@ -161,48 +175,114 @@ export default function AttendProjectEditor({
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="font-semibold">アイテム（柄・グッズ）一覧</h2>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">発行URL一覧</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              1つの案件で何本でもURLを発行できます。URLは「柄・グッズ・スポット」など、
+              配布する単位ごとに1本ずつ作ってください。
+            </p>
+          </div>
           <button
             onClick={handleAddItem}
             disabled={addingItem}
-            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
+            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50 shrink-0"
           >
-            {addingItem ? "追加中..." : "+ アイテムを追加"}
+            {addingItem ? "追加中..." : "+ URLを発行"}
           </button>
         </div>
         <p className="text-xs text-slate-500">
-          1アイテムに複数の発火条件（画像トラッキング＋GPSなど）と、各発火条件に複数のARオブジェクトを設定できます。
+          1本のURLに、NFC・GPS・画像認識・マーカーを何種類でも組み合わせられます
+          （例: 同じキーホルダーで「かざす」と「その場所へ行く」の両方を用意する）。
+          利用者側では発火条件が複数あると切り替えボタンが出ます。
         </p>
 
-        <div className="divide-y">
-          {items.map((it) => (
-            <div key={it.id} className="py-3 flex items-center justify-between gap-3 text-sm">
-              <div className="min-w-0">
-                <div className="font-medium truncate">{it.name}</div>
-                <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
-                  <span>発火条件 {it.trigger_count}件</span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full ${
-                      it.status === "ready" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {itemStatusLabel[it.status]}
-                  </span>
-                  {it.status === "ready" && <code className="break-all">{`${siteOrigin}/a/${it.hash}`}</code>}
-                </div>
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <Link href={`/admin/attend/items/${it.id}`} className="text-blue-600 hover:underline">
-                  編集
-                </Link>
-                <button onClick={() => handleDeleteItem(it.id)} className="text-red-600 hover:underline">
-                  削除
-                </button>
-              </div>
-            </div>
-          ))}
-          {items.length === 0 && <p className="text-sm text-slate-400 py-4">まだアイテムが登録されていません</p>}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-slate-500 border-b">
+              <tr>
+                <th className="py-2 pr-3 font-medium">名前</th>
+                <th className="py-2 pr-3 font-medium">発火条件</th>
+                <th className="py-2 pr-3 font-medium">状態</th>
+                <th className="py-2 pr-3 font-medium">クライアント提供URL</th>
+                <th className="py-2 font-medium"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y">
+              {items.map((it) => {
+                const url = `${siteOrigin}/a/${it.hash}`;
+                return (
+                  <tr key={it.id} className="align-top">
+                    <td className="py-3 pr-3">
+                      <Link href={`/admin/attend/items/${it.id}`} className="font-medium text-blue-600 hover:underline">
+                        {it.name}
+                      </Link>
+                    </td>
+                    <td className="py-3 pr-3">
+                      {it.trigger_types.length === 0 ? (
+                        <span className="text-xs text-amber-600">未設定</span>
+                      ) : (
+                        <span className="flex flex-wrap gap-1">
+                          {it.trigger_types.map((t, i) => (
+                            <span
+                              key={i}
+                              className={`px-2 py-0.5 rounded-full text-[11px] ${
+                                TRIGGER_BADGE_CLASS[t] ?? "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {attendDisplayTypeShort(t)}
+                            </span>
+                          ))}
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-3 pr-3">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] ${
+                          it.status === "ready" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                        }`}
+                      >
+                        {itemStatusLabel[it.status]}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-3">
+                      {it.status === "ready" ? (
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs break-all">{url}</code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(url);
+                              setCopiedId(it.id);
+                              setTimeout(() => setCopiedId(null), 1500);
+                            }}
+                            className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50 shrink-0"
+                          >
+                            {copiedId === it.id ? "コピーしました" : "コピー"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-slate-400">公開準備完了にすると発行されます</span>
+                      )}
+                    </td>
+                    <td className="py-3 text-right whitespace-nowrap">
+                      <Link href={`/admin/attend/items/${it.id}`} className="text-blue-600 hover:underline">
+                        編集
+                      </Link>
+                      <button onClick={() => handleDeleteItem(it.id)} className="text-red-600 hover:underline ml-3">
+                        削除
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {items.length === 0 && (
+            <p className="text-sm text-slate-400 py-6 text-center">
+              まだURLがありません。「+ URLを発行」から作成してください。
+            </p>
+          )}
         </div>
       </section>
     </div>

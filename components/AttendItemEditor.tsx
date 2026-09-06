@@ -435,22 +435,41 @@ function TriggerCard({
         </button>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-2">
-        {ATTEND_DISPLAY_TYPES.map((t) => (
-          <label
-            key={t.value}
-            className={`flex items-start gap-2 text-xs border rounded-lg p-2 cursor-pointer ${
-              displayType === t.value ? "border-slate-900 ring-1 ring-slate-900" : ""
-            }`}
-          >
-            <input type="radio" className="mt-0.5" checked={displayType === t.value} onChange={() => setDisplayType(t.value)} />
-            <span>
-              <span className="block font-medium">{t.label}</span>
-              <span className="block text-[10px] text-slate-500">{t.hint}</span>
-            </span>
-          </label>
-        ))}
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-slate-600">何をきっかけに表示しますか？</p>
+        <div className="grid sm:grid-cols-2 gap-2">
+          {ATTEND_DISPLAY_TYPES.map((t) => (
+            <label
+              key={t.value}
+              className={`flex items-start gap-2 text-xs border rounded-lg p-3 cursor-pointer transition ${
+                displayType === t.value
+                  ? "border-slate-900 ring-1 ring-slate-900 bg-slate-50"
+                  : "hover:bg-slate-50"
+              }`}
+            >
+              <input
+                type="radio"
+                className="mt-0.5"
+                checked={displayType === t.value}
+                onChange={() => setDisplayType(t.value)}
+              />
+              <span className="min-w-0">
+                <span className="block font-medium">{t.label}</span>
+                <span className="block text-[10px] text-slate-500 mt-0.5">{t.hint}</span>
+                <span className="block text-[10px] text-slate-400 mt-1 leading-relaxed">{t.usage}</span>
+              </span>
+            </label>
+          ))}
+        </div>
       </div>
+
+      {displayType === "nfc" && (
+        <p className="text-xs text-slate-500 bg-violet-50 border border-violet-100 rounded-lg p-3 leading-relaxed">
+          NFCタグには、このアイテムのクライアント提供URLをそのまま書き込んでください。
+          かざして開いた瞬間に、カメラ映像の手前へオブジェクトが表示されます
+          （マーカーも位置も見ません）。設定はこれだけです。
+        </p>
+      )}
 
       {displayType === "aframe" && (
         <div className="space-y-2 text-sm">
@@ -513,10 +532,37 @@ function TriggerCard({
       {displayType === "gps" && (
         <div className="space-y-2 text-sm">
           <div className="grid sm:grid-cols-3 gap-2">
-            <input value={gpsLat} onChange={(e) => setGpsLat(e.target.value)} placeholder="緯度" className="input" />
-            <input value={gpsLng} onChange={(e) => setGpsLng(e.target.value)} placeholder="経度" className="input" />
-            <input value={gpsRadius} onChange={(e) => setGpsRadius(e.target.value)} placeholder="半径(m)" className="input" />
+            <label className="space-y-1 block">
+              <span className="text-xs text-slate-600">緯度</span>
+              <input value={gpsLat} onChange={(e) => setGpsLat(e.target.value)} placeholder="35.6586" className="input" />
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-xs text-slate-600">経度</span>
+              <input value={gpsLng} onChange={(e) => setGpsLng(e.target.value)} placeholder="139.7454" className="input" />
+            </label>
+            <label className="space-y-1 block">
+              <span className="text-xs text-slate-600">表示する半径(m)</span>
+              <input value={gpsRadius} onChange={(e) => setGpsRadius(e.target.value)} placeholder="20" className="input" />
+            </label>
           </div>
+          <p className="text-xs text-slate-500 leading-relaxed">
+            利用者がこの半径に入るとARが始まります。圏外のあいだは
+            「あと約120m」のように目的地までの距離を案内します。
+            スマホのGPSは市街地で10〜30mほど誤差が出るため、半径は20m以上を目安にしてください。
+            {gpsLat && gpsLng && (
+              <>
+                {" "}
+                <a
+                  href={`https://www.google.com/maps?q=${gpsLat},${gpsLng}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline"
+                >
+                  地図で確認
+                </a>
+              </>
+            )}
+          </p>
           <button
             type="button"
             onClick={handleUseCurrentLocation}

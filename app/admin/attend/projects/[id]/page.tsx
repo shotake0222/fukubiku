@@ -25,17 +25,22 @@ export default async function AttendProjectPage({ params }: { params: { id: stri
   const itemIds = itemList.map((i) => i.id);
 
   const { data: triggers } = itemIds.length
-    ? await supabase.from("attend_triggers").select("id, item_id").in("item_id", itemIds)
-    : { data: [] as Pick<AttendTrigger, "id" | "item_id">[] };
+    ? await supabase.from("attend_triggers").select("id, item_id, display_type").in("item_id", itemIds)
+    : { data: [] as Pick<AttendTrigger, "id" | "item_id" | "display_type">[] };
 
-  const countByItem = new Map<string, number>();
-  for (const t of (triggers as { id: string; item_id: string }[] | null) ?? []) {
-    countByItem.set(t.item_id, (countByItem.get(t.item_id) ?? 0) + 1);
+  // 一覧で「このURLは何で発火するのか(NFC/GPS/画像認識/マーカー)」が一目で分かるよう、
+  // 発火条件の件数だけでなく種類も渡す。
+  const typesByItem = new Map<string, string[]>();
+  for (const t of (triggers as { id: string; item_id: string; display_type: string }[] | null) ?? []) {
+    const list = typesByItem.get(t.item_id) ?? [];
+    list.push(t.display_type);
+    typesByItem.set(t.item_id, list);
   }
 
   const itemsWithCount: AttendItemWithTriggerCount[] = itemList.map((i) => ({
     ...i,
-    trigger_count: countByItem.get(i.id) ?? 0,
+    trigger_count: (typesByItem.get(i.id) ?? []).length,
+    trigger_types: typesByItem.get(i.id) ?? [],
   }));
 
   return <AttendProjectEditor project={project as AttendProject} items={itemsWithCount} />;

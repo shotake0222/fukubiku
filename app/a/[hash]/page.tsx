@@ -116,6 +116,7 @@ export default async function AttendViewerPage({ params }: { params: { hash: str
       faceAnchorIndex: t.face_anchor_index,
       gpsLat: t.gps_lat,
       gpsLng: t.gps_lng,
+      gpsRadiusM: t.gps_radius_m,
       targetImageIndices,
       objects: objs,
     };

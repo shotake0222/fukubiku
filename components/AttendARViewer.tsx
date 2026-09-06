@@ -34,17 +34,105 @@ export interface ResolvedTrigger {
   faceAnchorIndex: number | null;
   gpsLat: number | null;
   gpsLng: number | null;
+  /** この距離(m)まで近づくと表示する。未指定なら20m。 */
+  gpsRadiusM: number | null;
   /** mindar_imageの.mindファイルに含まれる画像のtargetIndex一覧(検出対象として描画するエンティティ数)。未指定時は[0]。 */
   targetImageIndices: number[];
   objects: ResolvedObject[];
 }
 
 const displayTypeShortLabel: Record<AttendDisplayType, string> = {
+  nfc: "NFC",
   aframe: "マーカー",
   mindar_image: "画像認識",
   mindar_face: "顔認識",
   gps: "GPS",
 };
+
+// 2点間の距離(m)。地球を半径6371kmの球とみなすハバサイン公式。
+// 数十m〜数kmの案内には十分な精度がある。
+function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function formatDistance(m: number): string {
+  if (m >= 1000) return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)}km`;
+  return `${Math.round(m / 10) * 10}m`;
+}
+
+// 目的地に近づくまでの案内。圏内に入ったら onArrive で本編へ切り替える。
+function GpsGuide({
+  lat,
+  lng,
+  radiusM,
+  onArrive,
+}: {
+  lat: number;
+  lng: number;
+  radiusM: number;
+  onArrive: () => void;
+}) {
+  const [distance, setDistance] = useState<number | null>(null);
+  const [accuracy, setAccuracy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setError("この端末では位置情報を取得できません。");
+      return;
+    }
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        setError(null);
+        setAccuracy(pos.coords.accuracy);
+        const d = distanceMeters(pos.coords.latitude, pos.coords.longitude, lat, lng);
+        setDistance(d);
+        // 測位誤差を足して判定する。誤差が大きい端末で永久に入れなくなるのを防ぐ。
+        if (d <= radiusM + Math.min(pos.coords.accuracy || 0, 30)) onArrive();
+      },
+      (e) => {
+        setError(
+          e.code === e.PERMISSION_DENIED
+            ? "位置情報の利用が許可されていません。ブラウザの設定から許可してください。"
+            : "位置情報を取得できませんでした。屋外で再度お試しください。"
+        );
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
+    );
+    return () => navigator.geolocation.clearWatch(id);
+  }, [lat, lng, radiusM, onArrive]);
+
+  return (
+    <div className="h-screen w-screen flex items-center justify-center bg-slate-900 text-white px-6">
+      <div className="text-center space-y-4 max-w-sm">
+        <p className="text-sm text-slate-300">この場所でだけ見られるコンテンツです</p>
+        {distance == null && !error && <p className="text-lg">現在地を確認しています...</p>}
+        {distance != null && (
+          <>
+            <p className="text-4xl font-bold tracking-tight">あと {formatDistance(distance)}</p>
+            <p className="text-sm text-slate-300">
+              目的地に近づくと自動でARが始まります（半径{radiusM}m）
+            </p>
+            {accuracy != null && accuracy > 50 && (
+              <p className="text-xs text-slate-400">
+                measuring… 測位の精度が粗い状態です（誤差 約{Math.round(accuracy)}m）。
+                屋外や見晴らしの良い場所だと安定します。
+              </p>
+            )}
+          </>
+        )}
+        {error && <p className="text-sm text-amber-300">{error}</p>}
+      </div>
+    </div>
+  );
+}
 
 function engineSrcFor(displayType: AttendDisplayType): string | null {
   if (displayType === "aframe" || displayType === "gps") return ARJS_SRC;
@@ -60,7 +148,73 @@ function isTriggerUsable(t: ResolvedTrigger): boolean {
   return true;
 }
 
+// NFCタグで開いたときの表示。マーカーも位置も判定せず、
+// カメラ映像を背景に敷いた上へオブジェクトを浮かべる。
+function NfcScene({ trigger }: { trigger: ResolvedTrigger }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let stream: MediaStream | null = null;
+    let cancelled = false;
+    navigator.mediaDevices
+      ?.getUserMedia({ video: { facingMode: "environment" }, audio: false })
+      .then((s) => {
+        if (cancelled) {
+          s.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        stream = s;
+        if (videoRef.current) {
+          videoRef.current.srcObject = s;
+          videoRef.current.play().catch(() => {});
+        }
+      })
+      .catch(() => {
+        setError("カメラを利用できませんでした。ブラウザの設定でカメラを許可してください。");
+      });
+    return () => {
+      cancelled = true;
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  return (
+    <>
+      <video
+        ref={videoRef}
+        playsInline
+        muted
+        autoPlay
+        className="fixed inset-0 w-full h-full object-cover"
+        style={{ zIndex: 0 }}
+      />
+      {error && (
+        <p className="fixed inset-x-0 top-4 z-20 text-center text-sm text-amber-200 px-6">{error}</p>
+      )}
+      <a-scene
+        embedded
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: true"
+        renderer="alpha: true;"
+        style={{ position: "fixed", inset: 0, zIndex: 1 }}
+      >
+        {/* カメラは原点。少し前方に置くと目の前に浮かんで見える */}
+        <a-entity position="0 0 -2">
+          {trigger.objects.map((o, i) => (
+            <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+          ))}
+        </a-entity>
+        <a-entity camera look-controls="magicWindowTrackingEnabled: true; mouseEnabled: false; touchEnabled: false"></a-entity>
+      </a-scene>
+    </>
+  );
+}
+
 function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
+  // GPSは半径内に入るまでARを起動せず、距離案内だけを出す。
+  // (半径は保存されているだけで使われていなかった)
+  const [arrived, setArrived] = useState(trigger.displayType !== "gps");
   const [aframeLoaded, setAframeLoaded] = useState(false);
   const [engineLoaded, setEngineLoaded] = useState(false);
   const [extrasLoaded, setExtrasLoaded] = useState(false); // aframe-extras (animation-mixer)
@@ -68,6 +222,22 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
   const registeredRef = useRef(false);
 
   const engineSrc = engineSrcFor(trigger.displayType);
+
+  if (
+    trigger.displayType === "gps" &&
+    !arrived &&
+    trigger.gpsLat != null &&
+    trigger.gpsLng != null
+  ) {
+    return (
+      <GpsGuide
+        lat={trigger.gpsLat}
+        lng={trigger.gpsLng}
+        radiusM={trigger.gpsRadiusM ?? 20}
+        onArrive={() => setArrived(true)}
+      />
+    );
+  }
 
   // A-Frame本体を読み込んでから、それに依存するaframe-extrasとAR.js/MindARを読み込む
   // (loadArScriptの実装/経緯はarObjectComponents.tsxのコメント参照)。
@@ -215,6 +385,11 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
           </a-entity>
         </a-scene>
       )}
+
+      {/* NFC: マーカーも位置も見ないので、AR.jsは使わずカメラ映像を直接背景に敷く。
+          (AR.jsはマーカー前提の作りで、認識対象が無いと映像サイズの計算が破綻し、
+           4000px超のvideoを作ってしまうことを実測で確認したため) */}
+      {ready && trigger.displayType === "nfc" && <NfcScene trigger={trigger} />}
     </div>
   );
 }

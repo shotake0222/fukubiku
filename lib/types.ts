@@ -169,17 +169,62 @@ export interface Order {
 
 // ---- あてんど (Attend) ----
 
-export type AttendDisplayType = "aframe" | "mindar_image" | "mindar_face" | "gps";
+export type AttendDisplayType = "aframe" | "mindar_image" | "mindar_face" | "gps" | "nfc";
 export type AttendPlan = "light" | "standard" | "enterprise";
 export type AttendProjectStatus = "draft" | "active" | "archived";
 export type AttendExperienceStatus = "draft" | "ready";
 
-export const ATTEND_DISPLAY_TYPES: { value: AttendDisplayType; label: string; hint: string }[] = [
-  { value: "aframe", label: "A-Frame（マーカー画像）", hint: "AR.jsパターンマーカーでトラッキング" },
-  { value: "mindar_image", label: "MindAR（画像認識）", hint: "任意の画像をアップロードしてコンパイル" },
-  { value: "mindar_face", label: "MindAR（顔認識）", hint: "顔のパーツを起点にARを表示" },
-  { value: "gps", label: "GPS位置トリガー", hint: "指定した緯度経度に近づくとARが起動" },
+export const ATTEND_DISPLAY_TYPES: {
+  value: AttendDisplayType;
+  /** 一覧のバッジなどに出す短い名前 */
+  short: string;
+  label: string;
+  hint: string;
+  /** 何をかざす/どこへ行くのか、現場での使われ方 */
+  usage: string;
+}[] = [
+  {
+    value: "nfc",
+    short: "NFC",
+    label: "NFCタグ（かざすだけ）",
+    hint: "タグにURLを書き込んでおき、スマホをかざすと開く",
+    usage: "マーカーも位置も見ずに、開いた瞬間にカメラ映像の手前へ表示します。",
+  },
+  {
+    value: "gps",
+    short: "GPS",
+    label: "GPS（その場所へ行く）",
+    hint: "指定した緯度経度の半径内に入ると表示",
+    usage: "聖地巡礼やスタンプラリー向け。圏外では目的地までの距離を案内します。",
+  },
+  {
+    value: "mindar_image",
+    short: "画像認識",
+    label: "MindAR（画像認識）",
+    hint: "任意の画像を登録して、その絵柄にかざすと表示",
+    usage: "ポスター・パッケージ・カードなど、絵柄そのものを目印にします。",
+  },
+  {
+    value: "aframe",
+    short: "マーカー",
+    label: "AR.js（白黒マーカー）",
+    hint: ".pattマーカーにかざすと表示",
+    usage: "専用の白黒マーカーを印刷して使う方式。認識が軽く安定します。",
+  },
+  {
+    value: "mindar_face",
+    short: "顔",
+    label: "MindAR（顔認識）",
+    hint: "インカメラで顔のパーツを起点に表示",
+    usage: "顔にお面やエフェクトを重ねる用途。",
+  },
 ];
+
+/** 一覧のバッジ表示などで使う短い名前。 */
+export function attendDisplayTypeShort(v: string | null | undefined): string {
+  const found = ATTEND_DISPLAY_TYPES.find((t) => t.value === v);
+  return found ? found.short : "未設定";
+}
 
 export const ATTEND_PLAN_LIMITS: Record<
   AttendPlan,
