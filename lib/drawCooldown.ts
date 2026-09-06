@@ -82,6 +82,14 @@ export const RETRY_MESSAGES: Record<string, string> = {
   cannon: "大砲は次の一発を装填中です。次の挑戦まで あと{remaining}です。",
   thunder: "雷神は次の一撃をためています。次の挑戦まで あと{remaining}です。",
   punch: "拳はまだ力をため直している最中です。次の挑戦まで あと{remaining}です。",
+  sankaku: "三角くじの折り目がまだ乾いていません。次の挑戦まで あと{remaining}です。",
+  ema: "絵馬はまだ願いを受け取っている最中です。次の挑戦まで あと{remaining}です。",
+  kagamibiraki: "樽の用意が整うまでもう少しです。次の挑戦まで あと{remaining}です。",
+  xmas: "プレゼントはただいま包み直し中です。次の挑戦まで あと{remaining}です。",
+  vending: "自動販売機は商品を補充しています。次の挑戦まで あと{remaining}です。",
+  receipt: "レジのロール紙を交換しています。次の挑戦まで あと{remaining}です。",
+  ring: "輪はまだ拾い集めている途中です。次の挑戦まで あと{remaining}です。",
+  safe: "金庫のダイヤルを掛け直しています。次の挑戦まで あと{remaining}です。",
 };
 
 export const DEFAULT_RETRY_MESSAGE =

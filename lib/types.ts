@@ -32,6 +32,15 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "cannon", label: "大砲・クラッカー砲" },
   { value: "thunder", label: "雷神の一撃" },
   { value: "punch", label: "超パンチ" },
+  // 2026-09 追加分
+  { value: "sankaku", label: "三角くじ" },
+  { value: "ema", label: "絵馬" },
+  { value: "kagamibiraki", label: "鏡開き" },
+  { value: "xmas", label: "クリスマス" },
+  { value: "vending", label: "自動販売機" },
+  { value: "receipt", label: "レシート" },
+  { value: "ring", label: "輪投げ" },
+  { value: "safe", label: "金庫" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
