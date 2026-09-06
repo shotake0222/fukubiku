@@ -98,6 +98,14 @@ export const RETRY_MESSAGES: Record<string, string> = {
   mogura: "もぐたちは巣穴でひと休み中です。次の挑戦まで あと{remaining}です。",
   bowling: "ピンを並べ直しています。次の挑戦まで あと{remaining}です。",
   makimono: "巻物はいま巻き直している途中です。次の挑戦まで あと{remaining}です。",
+  shateki: "コルク銃を整備しています。次の挑戦まで あと{remaining}です。",
+  kingyo: "水槽の水を入れ替えています。次の挑戦まで あと{remaining}です。",
+  kakigori: "氷を削り直しています。次の挑戦まで あと{remaining}です。",
+  halloween: "かぼちゃはまだ眠っています。次の挑戦まで あと{remaining}です。",
+  valentine: "チョコを詰め直しています。次の挑戦まで あと{remaining}です。",
+  tanabata: "短冊を書き直しています。次の挑戦まで あと{remaining}です。",
+  sushi: "次のお皿を握っている最中です。次の挑戦まで あと{remaining}です。",
+  taiyaki: "たい焼きはまだ焼いている途中です。次の挑戦まで あと{remaining}です。",
 };
 
 export const DEFAULT_RETRY_MESSAGE =

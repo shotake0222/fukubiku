@@ -49,6 +49,14 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "mogura", label: "もぐらたたき" },
   { value: "bowling", label: "ボウリング" },
   { value: "makimono", label: "巻物" },
+  { value: "shateki", label: "射的" },
+  { value: "kingyo", label: "金魚すくい" },
+  { value: "kakigori", label: "かき氷" },
+  { value: "halloween", label: "ハロウィン" },
+  { value: "valentine", label: "バレンタイン" },
+  { value: "tanabata", label: "七夕" },
+  { value: "sushi", label: "回転寿司" },
+  { value: "taiyaki", label: "たい焼き" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
