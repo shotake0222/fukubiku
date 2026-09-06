@@ -4,6 +4,7 @@ import AttendRallyEditor, { type RallySpotStat } from "@/components/AttendRallyE
 import type {
   AttendProject,
   AttendRally,
+  AttendRallyLink,
   AttendRallySpot,
   PresetObject,
 } from "@/lib/types";
@@ -22,7 +23,7 @@ export default async function AttendRallyPage({ params }: { params: { id: string
   if (error || !rallyRow) notFound();
   const rally = rallyRow as AttendRally;
 
-  const [{ data: project }, { data: presets }, { data: spotRows }] = await Promise.all([
+  const [{ data: project }, { data: presets }, { data: spotRows }, { data: linkRows }] = await Promise.all([
     supabase.from("attend_projects").select("*").eq("id", rally.project_id).single(),
     supabase
       .from("preset_objects")
@@ -34,6 +35,11 @@ export default async function AttendRallyPage({ params }: { params: { id: string
       .select("*")
       .eq("rally_id", rally.id)
       .order("sort_order", { ascending: true }),
+    supabase
+      .from("attend_rally_links")
+      .select("*")
+      .eq("rally_id", rally.id)
+      .order("created_at", { ascending: true }),
   ]);
 
   const spots = (spotRows as AttendRallySpot[] | null) ?? [];
@@ -78,6 +84,7 @@ export default async function AttendRallyPage({ params }: { params: { id: string
       project={project as AttendProject}
       spots={spots}
       presets={(presets as PresetObject[]) ?? []}
+      links={(linkRows as AttendRallyLink[] | null) ?? []}
       spotStats={Object.fromEntries(stats)}
       summary={{
         participants: participantCount ?? 0,

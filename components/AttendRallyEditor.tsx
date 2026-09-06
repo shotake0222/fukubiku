@@ -1,26 +1,49 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { generateHash } from "@/lib/hash";
 import { generateSpotCode } from "@/lib/rally";
 import {
-  ATTEND_RALLY_THEMES,
-  ATTEND_STAMP_METHOD_LABEL,
-  PRESET_CATEGORIES,
-} from "@/lib/types";
+  RALLY_THEME_GROUPS,
+  RALLY_THEME_LIST,
+  resolveTheme,
+  type AttendRallyTheme,
+} from "@/lib/rallyThemes";
+import { ATTEND_RALLY_LINK_MODES, ATTEND_STAMP_METHOD_LABEL, PRESET_CATEGORIES } from "@/lib/types";
 import type {
   AttendProject,
   AttendRally,
+  AttendRallyLink,
+  AttendRallyLinkMode,
   AttendRallySpot,
   AttendRallyStatus,
-  AttendRallyTheme,
   ObjectSource,
   PresetObject,
 } from "@/lib/types";
 
 const UNCATEGORIZED = "__uncategorized__";
+const ASSET_BUCKET = "assets";
+
+function extOf(name: string) {
+  const m = name.match(/\.[a-zA-Z0-9]+$/);
+  return m ? m[0] : "";
+}
+
+async function uploadToAssets(
+  supabase: ReturnType<typeof createClient>,
+  path: string,
+  file: File
+) {
+  const { error } = await supabase.storage
+    .from(ASSET_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type || undefined });
+  if (error) throw error;
+  const { data } = supabase.storage.from(ASSET_BUCKET).getPublicUrl(path);
+  return data.publicUrl;
+}
 
 export interface RallySpotStat {
   total: number;
@@ -121,60 +144,265 @@ function categoryLabel(value: string) {
   return PRESET_CATEGORIES.find((c) => c.value === value)?.label ?? value;
 }
 
-function ObjectPicker({
+/**
+ * 表示するオブジェクトの指定。プリセットから選ぶか、その案件用の.glb等を
+ * アップロードして差し替えるかを選べる。
+ * （スポットごと・コンプリート特典それぞれで使う）
+ */
+function ObjectField({
   presets,
-  value,
-  onChange,
   label,
+  hint,
+  source,
+  presetId,
+  customUrl,
+  storagePrefix,
+  onChange,
 }: {
   presets: PresetObject[];
-  value: string | null;
-  onChange: (id: string | null) => void;
   label: string;
+  hint?: string;
+  source: ObjectSource;
+  presetId: string | null;
+  customUrl: string | null;
+  /** アップロード先のパス接頭辞（案件・スポットごとに分ける） */
+  storagePrefix: string;
+  onChange: (v: {
+    object_source: ObjectSource;
+    preset_object_id: string | null;
+    custom_model_url: string | null;
+  }) => void;
 }) {
-  const current = presets.find((p) => p.id === value) ?? null;
+  const supabase = useMemo(() => createClient(), []);
+  const current = presets.find((p) => p.id === presetId) ?? null;
   const [category, setCategory] = useState<string>(
     current?.category || presets[0]?.category || UNCATEGORIZED
   );
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
   const categories = useMemo(() => {
     const set = new Set(presets.map((p) => p.category || UNCATEGORIZED));
     return Array.from(set);
   }, [presets]);
   const inCategory = presets.filter((p) => (p.category || UNCATEGORIZED) === category);
 
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const url = await uploadToAssets(
+        supabase,
+        `${storagePrefix}/${Date.now()}${extOf(file.name)}`,
+        file
+      );
+      onChange({ object_source: "upload", preset_object_id: null, custom_model_url: url });
+    } catch (e: any) {
+      setUploadError(`アップロードに失敗しました: ${e?.message ?? e}`);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
-    <div className="space-y-1.5">
-      <span className="text-xs font-medium text-slate-600">{label}</span>
-      <div className="flex gap-2">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="input text-sm"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {categoryLabel(c)}
-            </option>
-          ))}
-        </select>
-        <select
-          value={value ?? ""}
-          onChange={(e) => onChange(e.target.value || null)}
-          className="input text-sm flex-1"
-        >
-          <option value="">選択してください</option>
-          {inCategory.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
+    <div className="space-y-2">
+      <div>
+        <span className="text-xs font-medium text-slate-600">{label}</span>
+        {hint && <p className="text-[11px] text-slate-400">{hint}</p>}
       </div>
-      {current && (
-        <p className="text-[11px] text-slate-400 break-all">現在: {current.name}（{current.model_url}）</p>
+
+      <div className="flex gap-4 text-xs">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="radio"
+            checked={source === "preset"}
+            onChange={() =>
+              onChange({
+                object_source: "preset",
+                preset_object_id: presetId,
+                custom_model_url: null,
+              })
+            }
+          />
+          プリセットから選ぶ
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="radio"
+            checked={source === "upload"}
+            onChange={() =>
+              onChange({
+                object_source: "upload",
+                preset_object_id: null,
+                custom_model_url: customUrl,
+              })
+            }
+          />
+          この案件用にアップロード
+        </label>
+      </div>
+
+      {source === "preset" ? (
+        <>
+          <div className="flex gap-2">
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="input text-sm"
+            >
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {categoryLabel(c)}
+                </option>
+              ))}
+            </select>
+            <select
+              value={presetId ?? ""}
+              onChange={(e) =>
+                onChange({
+                  object_source: "preset",
+                  preset_object_id: e.target.value || null,
+                  custom_model_url: null,
+                })
+              }
+              className="input text-sm flex-1"
+            >
+              <option value="">選択してください</option>
+              {inCategory.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {current && (
+            <p className="text-[11px] text-slate-400 break-all">
+              現在: {current.name}（{current.model_url}）
+            </p>
+          )}
+        </>
+      ) : (
+        <div className="space-y-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".glb,.gltf,.mp4,.webm,.png,.jpg,.jpeg,.gif,.webp"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleUpload(f);
+              e.target.value = "";
+            }}
+            className="text-xs"
+          />
+          {uploading && <p className="text-[11px] text-slate-500">アップロード中...</p>}
+          {uploadError && <p className="text-[11px] text-red-600">{uploadError}</p>}
+          {customUrl && (
+            <p className="text-[11px] text-slate-400 break-all">現在: {customUrl}</p>
+          )}
+          <p className="text-[11px] text-slate-400">
+            .glb を推奨（動画/画像も置けます）。差し替えると次に開いた参加者から新しい見た目になります。
+          </p>
+        </div>
       )}
     </div>
   );
+}
+
+/**
+ * デザインの選択。色だけの一覧だと違いが分かりにくいので、
+ * 実際の配色でスタンプ帳の縮小見本を描いて選ばせる。
+ */
+function ThemePicker({
+  value,
+  onChange,
+  allowInherit,
+}: {
+  value: AttendRallyTheme | null;
+  onChange: (v: AttendRallyTheme | null) => void;
+  /** URL単位の指定で「ラリー既定に従う」を出すか */
+  allowInherit?: boolean;
+}) {
+  return (
+    <div className="space-y-3">
+      {allowInherit && (
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          className={`w-full rounded-lg border px-3 py-2 text-left text-xs ${
+            value === null ? "border-slate-900 bg-slate-50" : "border-slate-200"
+          }`}
+        >
+          ラリー既定のデザインに従う
+        </button>
+      )}
+      {RALLY_THEME_GROUPS.map((group) => (
+        <div key={group} className="space-y-1.5">
+          <p className="text-[11px] font-medium text-slate-500">{group}</p>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {RALLY_THEME_LIST.filter((t) => t.group === group).map((t) => {
+              const selected = value === t.value;
+              return (
+                <button
+                  key={t.value}
+                  type="button"
+                  title={t.hint}
+                  onClick={() => onChange(t.value)}
+                  className={`overflow-hidden rounded-lg border text-left transition ${
+                    selected ? "border-slate-900 ring-2 ring-slate-900/15" : "border-slate-200"
+                  }`}
+                >
+                  <div
+                    className="flex h-14 items-center gap-1.5 px-3"
+                    style={{ background: t.bg, backgroundImage: t.pattern ?? undefined }}
+                  >
+                    <span
+                      className="h-7 w-7 shrink-0"
+                      style={{
+                        borderRadius: t.stampShape === "circle" ? "9999px" : t.stampShape === "seal" ? "20%" : "0",
+                        border: `2px solid ${t.accent}`,
+                        background: t.panel,
+                      }}
+                    />
+                    <span className="flex-1 space-y-1">
+                      <span className="block h-1.5 w-full rounded" style={{ background: t.line }} />
+                      <span className="block h-1.5 w-2/3 rounded" style={{ background: t.accent }} />
+                    </span>
+                  </div>
+                  <div className="px-2 py-1.5">
+                    <p className="text-xs font-medium text-slate-800">{t.label}</p>
+                    <p className="truncate text-[10px] text-slate-400">{t.hint}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** 埋め込み用のHTML。高さの自動調整と、カメラ/位置情報の許可までを含めて渡す。 */
+export function buildEmbedSnippet(embedUrl: string, hash: string, title: string): string {
+  return [
+    `<iframe`,
+    `  src="${embedUrl}"`,
+    `  title="${title.replace(/"/g, "&quot;")}"`,
+    `  style="width:100%;border:0;height:720px"`,
+    `  allow="geolocation; camera; accelerometer; gyroscope; magnetometer; xr-spatial-tracking"`,
+    `  loading="lazy"`,
+    `  referrerpolicy="strict-origin-when-cross-origin"`,
+    `></iframe>`,
+    `<script>`,
+    `window.addEventListener("message", function (e) {`,
+    `  var d = e.data;`,
+    `  if (!d || d.type !== "attend-rally-resize" || d.hash !== "${hash}") return;`,
+    `  var f = document.querySelector('iframe[src*="/embed/${hash}"]');`,
+    `  if (f) f.style.height = d.height + "px";`,
+    `});`,
+    `</script>`,
+  ].join("\n");
 }
 
 function CopyRow({ label, value, hint }: { label: string; value: string; hint?: string }) {
@@ -206,6 +434,7 @@ export default function AttendRallyEditor({
   project,
   spots,
   presets,
+  links,
   spotStats,
   summary,
 }: {
@@ -213,6 +442,7 @@ export default function AttendRallyEditor({
   project: AttendProject;
   spots: AttendRallySpot[];
   presets: PresetObject[];
+  links: AttendRallyLink[];
   spotStats: Record<string, RallySpotStat>;
   summary: { participants: number; completed: number; redeemed: number };
 }) {
@@ -236,7 +466,11 @@ export default function AttendRallyEditor({
   const [couponEnabled, setCouponEnabled] = useState(rally.reward_coupon_enabled);
   const [couponLabel, setCouponLabel] = useState(rally.reward_coupon_label);
   const [couponNote, setCouponNote] = useState(rally.reward_coupon_note ?? "");
+  const [rewardSource, setRewardSource] = useState<ObjectSource>(
+    rally.reward_object_source === "upload" ? "upload" : "preset"
+  );
   const [rewardPresetId, setRewardPresetId] = useState<string | null>(rally.reward_preset_object_id);
+  const [rewardCustomUrl, setRewardCustomUrl] = useState<string | null>(rally.reward_custom_model_url);
   const [rewardMessage, setRewardMessage] = useState(rally.reward_message);
   const [staffPin, setStaffPin] = useState(rally.staff_pin ?? "");
 
@@ -247,6 +481,54 @@ export default function AttendRallyEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+
+  // 公開URLはラリー本体の保存とは切り離し、その場で反映する
+  // （URLの発行・停止は「設定の編集」ではなく運用操作なので、保存ボタン待ちにしない）。
+  const [linkList, setLinkList] = useState<AttendRallyLink[]>(links);
+  const [openLinkId, setOpenLinkId] = useState<string | null>(null);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
+
+  const urlFor = (l: AttendRallyLink) =>
+    `${siteOrigin}/${l.mode === "embed" ? "embed" : "r"}/${l.hash}`;
+
+  async function addLink(mode: AttendRallyLinkMode) {
+    setError(null);
+    const { data, error } = await supabase
+      .from("attend_rally_links")
+      .insert({
+        rally_id: rally.id,
+        hash: generateHash(),
+        name: mode === "embed" ? "埋め込み用URL" : "配布用URL",
+        mode,
+        compact: mode === "embed",
+      })
+      .select("*")
+      .single();
+    if (error || !data) {
+      setError(`URLの発行に失敗しました: ${error?.message ?? ""}`);
+      return;
+    }
+    const created = data as AttendRallyLink;
+    setLinkList((prev) => [...prev, created]);
+    setOpenLinkId(created.id);
+  }
+
+  async function updateLink(id: string, patch: Partial<AttendRallyLink>) {
+    setLinkList((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
+    const { error } = await supabase.from("attend_rally_links").update(patch).eq("id", id);
+    if (error) setError(`URLの更新に失敗しました: ${error.message}`);
+  }
+
+  async function deleteLink(id: string) {
+    if (!confirm("このURLを削除しますか？ 配布済みの場合は開けなくなります。（スタンプの記録は消えません）"))
+      return;
+    const { error } = await supabase.from("attend_rally_links").delete().eq("id", id);
+    if (error) {
+      setError(`URLの削除に失敗しました: ${error.message}`);
+      return;
+    }
+    setLinkList((prev) => prev.filter((l) => l.id !== id));
+  }
 
   function updateDraft(id: string, patch: Partial<SpotDraft>) {
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
@@ -325,8 +607,10 @@ export default function AttendRallyEditor({
         reward_coupon_enabled: couponEnabled,
         reward_coupon_label: couponLabel || "記念品引換",
         reward_coupon_note: couponNote || null,
-        reward_object_source: rewardPresetId ? "preset" : null,
-        reward_preset_object_id: rewardPresetId,
+        reward_object_source:
+          rewardSource === "upload" ? (rewardCustomUrl ? "upload" : null) : rewardPresetId ? "preset" : null,
+        reward_preset_object_id: rewardSource === "upload" ? null : rewardPresetId,
+        reward_custom_model_url: rewardSource === "upload" ? rewardCustomUrl : null,
         reward_message: rewardMessage || "コンプリートおめでとうございます！",
         staff_pin: staffPin || null,
       })
@@ -425,28 +709,193 @@ export default function AttendRallyEditor({
 
       {/* ---- URL ---- */}
       <section className="bg-white rounded-xl shadow p-6 space-y-3">
-        <h2 className="font-semibold">配布するURL</h2>
-        <CopyRow
-          label="参加者用"
-          value={rallyUrl}
-          hint="ポスター・チラシ・SNSに載せるURL。開いた瞬間にスタンプ帳が始まります（登録不要）。"
-        />
-        <CopyRow
-          label="引換窓口用"
-          value={staffUrl}
-          hint="スタッフ用。引換コードを照合して使用済みにします。下で設定する暗証番号が必要です。"
-        />
-        <div className="pt-2 flex gap-3 text-sm">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">公開URL</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              1つのラリーに何本でもURLを発行できます。URLごとにデザインを変えられ、
+              どのURLから入っても参加者のスタンプ帳は同じものが続きます。
+              停止すればそのURLだけ開けなくなります（他のURLと記録には影響しません）。
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0">
+            <button
+              onClick={() => addLink("standalone")}
+              className="bg-pink-600 text-white text-xs rounded-lg px-3 py-2"
+            >
+              + 配布用URL
+            </button>
+            <button
+              onClick={() => addLink("embed")}
+              className="border text-xs rounded-lg px-3 py-2 hover:bg-slate-50"
+            >
+              + 埋め込み用URL
+            </button>
+          </div>
+        </div>
+
+        <ul className="space-y-3">
+          {linkList.map((l) => {
+            const url = urlFor(l);
+            const open = openLinkId === l.id;
+            const modeLabel = ATTEND_RALLY_LINK_MODES.find((m) => m.value === l.mode);
+            const themeLabel = l.theme ? resolveTheme(l.theme).label : "ラリー既定";
+            return (
+              <li key={l.id} className="border rounded-xl">
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <button type="button" onClick={() => setOpenLinkId(open ? null : l.id)} className="flex-1 text-left min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[11px] ${
+                          l.mode === "embed" ? "bg-indigo-100 text-indigo-700" : "bg-pink-100 text-pink-700"
+                        }`}
+                      >
+                        {modeLabel?.label ?? l.mode}
+                      </span>
+                      <span className="font-medium truncate">{l.name}</span>
+                      {!l.enabled && (
+                        <span className="px-2 py-0.5 rounded-full text-[11px] bg-slate-200 text-slate-600">
+                          停止中
+                        </span>
+                      )}
+                    </div>
+                    <code className="text-[11px] text-slate-400 break-all">{url}</code>
+                    <p className="text-[11px] text-slate-400">デザイン: {themeLabel}</p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText(url);
+                      setCopiedLinkId(l.id);
+                      setTimeout(() => setCopiedLinkId(null), 1500);
+                    }}
+                    className="text-xs px-2 py-1 rounded border hover:bg-slate-50 shrink-0"
+                  >
+                    {copiedLinkId === l.id ? "コピーしました" : "URLをコピー"}
+                  </button>
+                </div>
+
+                {open && (
+                  <div className="border-t px-4 py-4 space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="block space-y-1">
+                        <span className="text-xs font-medium text-slate-600">管理用の名前</span>
+                        <input
+                          value={l.name}
+                          onChange={(e) => updateLink(l.id, { name: e.target.value })}
+                          placeholder="例: 観光協会サイト用"
+                          className="input w-full"
+                        />
+                      </label>
+                      <label className="flex items-center gap-2 self-end pb-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={l.enabled}
+                          onChange={(e) => updateLink(l.id, { enabled: e.target.checked })}
+                        />
+                        このURLを有効にする
+                      </label>
+                    </div>
+
+                    <div className="space-y-2">
+                      <span className="text-xs font-medium text-slate-600">このURLのデザイン</span>
+                      <ThemePicker
+                        allowInherit
+                        value={l.theme}
+                        onChange={(v) => updateLink(l.id, { theme: v })}
+                      />
+                    </div>
+
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={l.compact}
+                        onChange={(e) => updateLink(l.id, { compact: e.target.checked })}
+                      />
+                      説明文を省いた詰めた表示にする（狭い場所に置くとき）
+                    </label>
+
+                    {l.mode === "embed" ? (
+                      <div className="space-y-3">
+                        <label className="block space-y-1">
+                          <span className="text-xs font-medium text-slate-600">
+                            埋め込みを許可する配信元（カンマ区切り・空なら制限しない）
+                          </span>
+                          <input
+                            value={l.allowed_origins ?? ""}
+                            onChange={(e) => updateLink(l.id, { allowed_origins: e.target.value || null })}
+                            placeholder="https://www.example-kankou.jp, https://example-city.lg.jp"
+                            className="input w-full"
+                          />
+                          <span className="block text-[11px] text-slate-400">
+                            指定すると、そのサイト以外のページに貼られても表示されなくなります。
+                          </span>
+                        </label>
+
+                        <div className="space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-slate-600">埋め込みコード</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard?.writeText(buildEmbedSnippet(url, l.hash, rally.name));
+                                setCopiedLinkId(`snippet-${l.id}`);
+                                setTimeout(() => setCopiedLinkId(null), 1500);
+                              }}
+                              className="text-xs px-2 py-0.5 rounded border hover:bg-slate-50"
+                            >
+                              {copiedLinkId === `snippet-${l.id}` ? "コピーしました" : "コードをコピー"}
+                            </button>
+                          </div>
+                          <pre className="bg-slate-900 text-slate-100 text-[11px] rounded-lg p-3 overflow-x-auto">
+                            {buildEmbedSnippet(url, l.hash, rally.name)}
+                          </pre>
+                          <p className="text-[11px] text-slate-400">
+                            このコードをページに貼るだけで表示されます。高さは中身に合わせて自動で伸縮します。
+                            allow に camera / geolocation を含めているので、埋め込み先でもGPSでスタンプが押せます
+                            （ARの演出は別タブで開きます）。
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-3 text-sm">
+                        <a href={url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                          参加者画面を開く →
+                        </a>
+                      </div>
+                    )}
+
+                    <div className="pt-1">
+                      <button onClick={() => deleteLink(l.id)} className="text-xs text-red-600 hover:underline">
+                        このURLを削除
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        {linkList.length === 0 && (
+          <p className="text-sm text-slate-400 py-6 text-center">
+            まだURLがありません。上のボタンから発行してください。
+          </p>
+        )}
+
+        <div className="border-t pt-4 space-y-3">
+          <CopyRow
+            label="引換窓口用"
+            value={staffUrl}
+            hint="スタッフ用。引換コードを照合して使用済みにします。下で設定する暗証番号が必要です。"
+          />
           <Link
             href={`/admin/attend/rallies/${rally.id}/print`}
             target="_blank"
-            className="text-blue-600 hover:underline"
+            className="text-sm text-blue-600 hover:underline"
           >
             スタンプ台用のQR・合言葉を印刷する →
           </Link>
-          <a href={rallyUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-            参加者画面を開く →
-          </a>
         </div>
       </section>
 
@@ -497,20 +946,14 @@ export default function AttendRallyEditor({
           </label>
         </div>
 
-        <label className="block space-y-1">
-          <span className="text-sm font-medium">配色テーマ</span>
-          <select
-            value={theme}
-            onChange={(e) => setTheme(e.target.value as AttendRallyTheme)}
-            className="input w-full"
-          >
-            {ATTEND_RALLY_THEMES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label} — {t.hint}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="space-y-2">
+          <span className="text-sm font-medium">デザイン（既定）</span>
+          <p className="text-[11px] text-slate-400">
+            URLごとに別のデザインを指定することもできます（下の「公開URL」で設定）。
+            ここで選んだものは、指定が無いURLの既定になります。
+          </p>
+          <ThemePicker value={theme} onChange={(v) => v && setTheme(v)} />
+        </div>
       </section>
 
       {/* ---- スポット ---- */}
@@ -725,11 +1168,21 @@ export default function AttendRallyEditor({
                     {/* AR */}
                     <div className="rounded-lg bg-slate-50 p-4 space-y-3">
                       <p className="text-sm font-medium">スタンプ獲得時に出るARオブジェクト</p>
-                      <ObjectPicker
+                      <ObjectField
                         presets={presets}
-                        value={d.preset_object_id}
-                        onChange={(id) => updateDraft(d.id, { preset_object_id: id, object_source: "preset" })}
-                        label="プリセットから選ぶ"
+                        label="表示するオブジェクト"
+                        hint="プリセットの3Dモデルか、この案件用にアップロードしたファイルを選べます。"
+                        source={d.object_source}
+                        presetId={d.preset_object_id}
+                        customUrl={d.custom_model_url}
+                        storagePrefix={`attend/rally/${rally.id}/spot`}
+                        onChange={(v) =>
+                          updateDraft(d.id, {
+                            object_source: v.object_source,
+                            preset_object_id: v.preset_object_id,
+                            custom_model_url: v.custom_model_url,
+                          })
+                        }
                       />
                       <div className="grid grid-cols-3 gap-3">
                         <label className="block space-y-1">
@@ -787,11 +1240,19 @@ export default function AttendRallyEditor({
           <input value={rewardMessage} onChange={(e) => setRewardMessage(e.target.value)} className="input w-full" />
         </label>
 
-        <ObjectPicker
+        <ObjectField
           presets={presets}
-          value={rewardPresetId}
-          onChange={setRewardPresetId}
           label="記念ARオブジェクト（達成画面から見られます）"
+          hint="コンプリートした人だけが見られる特別な一体。差し替え自由です。"
+          source={rewardSource}
+          presetId={rewardPresetId}
+          customUrl={rewardCustomUrl}
+          storagePrefix={`attend/rally/${rally.id}/reward`}
+          onChange={(v) => {
+            setRewardSource(v.object_source);
+            setRewardPresetId(v.preset_object_id);
+            setRewardCustomUrl(v.custom_model_url);
+          }}
         />
 
         <div className="rounded-lg bg-amber-50 p-4 space-y-3">

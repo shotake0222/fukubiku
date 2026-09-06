@@ -82,10 +82,22 @@ export function isWithinPeriod(rally: Pick<AttendRally, "starts_at" | "ends_at">
   return true;
 }
 
-/** 参加者Cookie名。ラリーごとに分けて、同じ端末で複数のラリーに参加できるようにする。 */
-export function participantCookieName(rallyHash: string): string {
-  return `rally_p_${rallyHash}`;
+/**
+ * 参加者Cookie名。ラリーIDで分ける。
+ *
+ * URLのハッシュではなくラリーIDを使うのが要点で、同じラリーに配布用URLと
+ * 埋め込み用URLの2本を発行しても、参加者から見れば1冊のスタンプ帳が続く。
+ */
+export function participantCookieName(rallyId: string): string {
+  return `rally_p_${rallyId}`;
 }
+
+/**
+ * 埋め込み(iframe)ではサードパーティCookieが落とされることがあるため、
+ * 参加者IDをこのヘッダでも受け取れるようにしている。
+ * 埋め込み側はlocalStorageに控えておき、毎回これで名乗る。
+ */
+export const PARTICIPANT_HEADER = "x-rally-participant";
 
 /** 参加者画面へ返す公開状態。staff_pin など秘密の値は含めない。 */
 export interface RallyPublicState {

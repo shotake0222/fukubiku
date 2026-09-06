@@ -23,8 +23,10 @@ create table if not exists attend_rallies (
   starts_at timestamptz,
   ends_at timestamptz,
 
-  -- 見た目のテーマ（参加者画面の配色）
-  theme text not null default 'washi' check (theme in ('washi', 'night', 'pop')),
+  -- 見た目のテーマ（参加者画面のデザインパターン）。
+  -- 一覧はアプリ側(lib/rallyThemes.ts)が持つため、ここではCHECKで縛らない
+  -- （縛るとテーマを増やすたびに保存だけ失敗する事故が起きるため）。
+  theme text not null default 'washi',
 
   -- 特典1: 引換コード（コンプリート時に発行。窓口で提示して景品交換）
   reward_coupon_enabled boolean not null default true,
@@ -187,3 +189,6 @@ create policy "authenticated read attend_rally_rewards" on attend_rally_rewards
 drop policy if exists "authenticated update attend_rally_rewards" on attend_rally_rewards;
 create policy "authenticated update attend_rally_rewards" on attend_rally_rewards
   for update to authenticated using (true) with check (true);
+
+-- 公開URL(配布用・埋め込み用)を複数発行する仕組みは
+-- supabase/add_rally_links_and_themes.sql に分けてある。続けて実行してください。

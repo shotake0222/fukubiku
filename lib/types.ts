@@ -418,14 +418,28 @@ export interface AttendMarkerWithProject extends AttendMarkerWithImages {
 // 進捗はサーバー(attend_rally_stamps)に保存し、Cookieの参加者IDで紐づける。
 
 export type AttendRallyStatus = "draft" | "active" | "archived";
-export type AttendRallyTheme = "washi" | "night" | "pop";
 /** スタンプの取得方法。どれで押しても1スポット1個。 */
 export type AttendStampMethod = "gps" | "qr" | "nfc" | "code" | "manual";
 
-export const ATTEND_RALLY_THEMES: { value: AttendRallyTheme; label: string; hint: string }[] = [
-  { value: "washi", label: "和紙（生成り）", hint: "神社仏閣・門前町・城下町向けの落ち着いた配色" },
-  { value: "night", label: "夜市（濃紺）", hint: "夜のイベント・ライトアップ・祭り向け" },
-  { value: "pop", label: "ポップ（明色）", hint: "商店街・ファミリー向けイベント向け" },
+// デザインパターンの定義は lib/rallyThemes.ts に置いている
+// (参加者画面と管理画面のプレビューで同じ定義を使うため)。
+export type { AttendRallyTheme, RallyTheme } from "@/lib/rallyThemes";
+export { RALLY_THEMES, RALLY_THEME_LIST, RALLY_THEME_GROUPS, resolveTheme } from "@/lib/rallyThemes";
+
+/** 公開URLの種類。standalone=そのまま配布、embed=他サイトのiframeに埋める。 */
+export type AttendRallyLinkMode = "standalone" | "embed";
+
+export const ATTEND_RALLY_LINK_MODES: { value: AttendRallyLinkMode; label: string; hint: string }[] = [
+  {
+    value: "standalone",
+    label: "配布用URL",
+    hint: "ポスター・SNS・チラシに載せてそのまま開いてもらうURL",
+  },
+  {
+    value: "embed",
+    label: "埋め込み用URL",
+    hint: "観光協会サイトなど、他のWebページのiframeに埋め込むためのURL",
+  },
 ];
 
 export const ATTEND_STAMP_METHOD_LABEL: Record<AttendStampMethod, string> = {
@@ -435,6 +449,8 @@ export const ATTEND_STAMP_METHOD_LABEL: Record<AttendStampMethod, string> = {
   code: "合言葉",
   manual: "手動付与",
 };
+
+import type { AttendRallyTheme as RallyThemeValue } from "@/lib/rallyThemes";
 
 export interface AttendRally {
   id: string;
@@ -447,7 +463,7 @@ export interface AttendRally {
   required_count: number | null;
   starts_at: string | null;
   ends_at: string | null;
-  theme: AttendRallyTheme;
+  theme: RallyThemeValue;
 
   reward_coupon_enabled: boolean;
   reward_coupon_label: string;
@@ -523,4 +539,27 @@ export interface AttendRallyReward {
   issued_at: string;
   redeemed_at: string | null;
   redeemed_note: string | null;
+}
+
+/**
+ * 公開URL。1つのラリーに何本でも発行でき、URLごとにデザインと表示形式を変えられる。
+ * どのURLから入っても参加者の進捗（スタンプ帳）は同じものが続く。
+ */
+export interface AttendRallyLink {
+  id: string;
+  rally_id: string;
+  hash: string;
+  name: string;
+  mode: AttendRallyLinkMode;
+  /** null ならラリー既定のテーマを使う。 */
+  theme: RallyThemeValue | null;
+  /** 埋め込み向けに説明文などを省いた詰めた表示にする。 */
+  compact: boolean;
+  /** 埋め込みを許可する配信元。カンマ区切り。空なら制限しない。 */
+  allowed_origins: string | null;
+  /** 停止するとこのURLだけ開けなくなる（他のURLには影響しない）。 */
+  enabled: boolean;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
 }

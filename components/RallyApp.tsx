@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { distanceMeters, formatDistance } from "@/lib/rally";
-import type { AttendRallyTheme, AttendStampMethod } from "@/lib/types";
+import { PARTICIPANT_HEADER, distanceMeters, formatDistance } from "@/lib/rally";
+import { headingFont, resolveTheme, stampRadius, type RallyTheme } from "@/lib/rallyThemes";
+import type { AttendRallyLinkMode, AttendStampMethod } from "@/lib/types";
 import RallyStampScene from "./RallyStampScene";
 
 export interface RallySpotView {
@@ -24,9 +25,15 @@ export interface RallySpotView {
 
 export interface RallyView {
   hash: string;
+  /** 埋め込みから「フル画面で開く」ための配布用URLのハッシュ。 */
+  standaloneHash: string;
   name: string;
   description: string | null;
-  theme: AttendRallyTheme;
+  theme: string;
+  /** standalone=そのまま配布 / embed=他サイトのiframeの中 */
+  mode: AttendRallyLinkMode;
+  /** 説明文などを省いた詰めた表示にする。 */
+  compact: boolean;
   totalCount: number;
   requiredCount: number;
   active: boolean;
@@ -53,40 +60,6 @@ interface RallyState {
   coupon: { code: string; issuedAt: string; redeemedAt: string | null } | null;
 }
 
-// 参加者画面の配色。案件の雰囲気に合わせて管理画面から選ぶ。
-const THEMES: Record<
-  AttendRallyTheme,
-  { bg: string; panel: string; ink: string; sub: string; accent: string; onAccent: string; line: string }
-> = {
-  washi: {
-    bg: "#f3ede0",
-    panel: "#fffdf6",
-    ink: "#33291f",
-    sub: "#8a7a66",
-    accent: "#b03a2e",
-    onAccent: "#fffaf2",
-    line: "#e2d7c3",
-  },
-  night: {
-    bg: "#101627",
-    panel: "#1b2338",
-    ink: "#eef2fb",
-    sub: "#9aa6c4",
-    accent: "#f0b429",
-    onAccent: "#1b2338",
-    line: "#2c3550",
-  },
-  pop: {
-    bg: "#fff4ec",
-    panel: "#ffffff",
-    ink: "#23304a",
-    sub: "#7b89a5",
-    accent: "#ff5c72",
-    onAccent: "#ffffff",
-    line: "#ffe0d4",
-  },
-};
-
 const METHOD_LABEL: Record<AttendStampMethod, string> = {
   gps: "現地で取得",
   qr: "QRで取得",
@@ -108,7 +81,10 @@ export default function RallyApp({
   landingCode: string | null;
   landingVia: "qr" | "nfc";
 }) {
-  const t = THEMES[rally.theme] ?? THEMES.washi;
+  const t = resolveTheme(rally.theme);
+  const isEmbed = rally.mode === "embed";
+  const dense = isEmbed || rally.compact;
+  const fullUrl = `/r/${rally.standaloneHash}`;
 
   const [state, setState] = useState<RallyState | null>(null);
   const [screen, setScreen] = useState<Screen>("book");
@@ -132,21 +108,52 @@ export default function RallyApp({
   const activeSpot = spots.find((s) => s.id === activeSpotId) ?? null;
   const celebrateSpot = spots.find((s) => s.id === celebrateSpotId) ?? null;
 
+  // 埋め込み(iframe)ではサードパーティCookieが落とされることがあるため、
+  // 参加者IDをこの端末のlocalStorageにも控え、毎回ヘッダで名乗る。
+  // 保存先はラリー単位（配布用URLのハッシュ）にしてあるので、
+  // 同じラリーの別URLから入っても同じスタンプ帳が続く。
+  const tokenKey = `attend_rally_participant_${rally.standaloneHash}`;
+
+  const readToken = useCallback((): string | null => {
+    try {
+      return window.localStorage.getItem(tokenKey);
+    } catch {
+      // プライベートブラウズなどで参照自体が例外になる環境がある
+      return null;
+    }
+  }, [tokenKey]);
+
+  const writeToken = useCallback(
+    (id: string) => {
+      try {
+        window.localStorage.setItem(tokenKey, id);
+      } catch {
+        // 保存できなくてもCookieが効いていれば問題ない
+      }
+    },
+    [tokenKey]
+  );
+
   const post = useCallback(
     async (path: string, body?: unknown) => {
+      const headers: Record<string, string> = { "content-type": "application/json" };
+      const token = readToken();
+      if (token) headers[PARTICIPANT_HEADER] = token;
+
       const res = await fetch(`/api/rally/${rally.hash}/${path}`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers,
         body: JSON.stringify(body ?? {}),
       });
       const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.participantId) writeToken(data.participantId);
       return { ok: res.ok, status: res.status, data } as {
         ok: boolean;
         status: number;
         data: any;
       };
     },
-    [rally.hash]
+    [rally.hash, readToken, writeToken]
   );
 
   // 開いた時点で匿名参加者を作る（登録不要で始められるようにするため）。
@@ -165,7 +172,8 @@ export default function RallyApp({
         // URLに合言葉が残ったままだと、再読み込みのたびに同じ処理が走り、
         // 他人に画面を見せた時にコードも見えてしまうので消しておく。
         if (typeof window !== "undefined") {
-          window.history.replaceState(null, "", `/r/${rally.hash}`);
+          const base = isEmbed ? "/embed" : "/r";
+          window.history.replaceState(null, "", `${base}/${rally.hash}`);
         }
       }
     })();
@@ -174,6 +182,25 @@ export default function RallyApp({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 埋め込み時は中身の高さを親ページへ知らせ、iframeを内容に合わせて伸縮させる。
+  // 埋め込みコード側の小さなスクリプトがこのメッセージを受けて height を書き換える。
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!isEmbed || typeof window === "undefined" || window.parent === window) return;
+    const el = rootRef.current;
+    if (!el) return;
+    const notify = () => {
+      window.parent.postMessage(
+        { type: "attend-rally-resize", hash: rally.hash, height: Math.ceil(el.scrollHeight) },
+        "*"
+      );
+    };
+    notify();
+    const ro = new ResizeObserver(notify);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
 
   // 現在地は常時見張っておき、スタンプ帳に「あと◯m」を出す。
   useEffect(() => {
@@ -303,6 +330,36 @@ export default function RallyApp({
   // ---- 画面 ----
 
   if (screen === "celebrate" && celebrateSpot) {
+    const closeCelebration = () => {
+      setCelebrateSpotId(null);
+      setScreen(state?.completed ? "complete" : "book");
+    };
+    const overlay = (
+      <StampGetOverlay
+        spot={celebrateSpot}
+        count={stampCount}
+        total={rally.totalCount}
+        completed={!!state?.completed}
+        onClose={closeCelebration}
+        arHref={isEmbed ? `/r/${rally.standaloneHash}` : null}
+      />
+    );
+
+    // 埋め込みの中でカメラを開くと、埋め込み先のiframeに権限が付いていない場合に
+    // 何も映らないまま止まってしまう。埋め込みでは配色だけの演出にして、
+    // ARは配布用URLを別タブで開いてもらう。
+    if (isEmbed) {
+      return (
+        <div
+          className="relative w-full overflow-hidden"
+          style={{ background: t.bg, minHeight: 420, borderRadius: t.radius }}
+        >
+          <div className="absolute inset-0" style={{ backgroundImage: t.pattern ?? undefined }} />
+          <div className="relative h-[420px]">{overlay}</div>
+        </div>
+      );
+    }
+
     return (
       <RallyStampScene
         modelUrl={celebrateSpot.modelUrl}
@@ -310,16 +367,7 @@ export default function RallyApp({
         scale={celebrateSpot.scale}
         rotationY={celebrateSpot.rotationY}
       >
-        <StampGetOverlay
-          spot={celebrateSpot}
-          count={stampCount}
-          total={rally.totalCount}
-          completed={!!state?.completed}
-          onClose={() => {
-            setCelebrateSpotId(null);
-            setScreen(state?.completed ? "complete" : "book");
-          }}
-        />
+        {overlay}
       </RallyStampScene>
     );
   }
@@ -328,6 +376,7 @@ export default function RallyApp({
     return (
       <SpotScreen
         theme={t}
+        isEmbed={isEmbed}
         spot={activeSpot}
         distance={distanceTo(activeSpot)}
         accuracy={pos?.coords.accuracy ?? null}
@@ -349,20 +398,35 @@ export default function RallyApp({
         rally={rally}
         spots={spots}
         state={state}
+        isEmbed={isEmbed}
         onBack={() => setScreen("book")}
       />
     );
   }
 
   return (
-    <div className="min-h-screen" style={{ background: t.bg, color: t.ink }}>
-      <div className="mx-auto max-w-md px-5 pb-28 pt-8">
+    <div
+      ref={rootRef}
+      className={isEmbed ? "relative w-full" : "min-h-screen"}
+      style={{
+        background: t.bg,
+        color: t.ink,
+        backgroundImage: t.pattern ?? undefined,
+        borderRadius: isEmbed ? t.radius : undefined,
+      }}
+    >
+      <div className={`mx-auto max-w-md px-5 ${dense ? "pb-8 pt-6" : "pb-28 pt-8"}`}>
         <header className="space-y-2">
           <p className="text-xs tracking-[0.3em]" style={{ color: t.sub }}>
             STAMP RALLY
           </p>
-          <h1 className="text-2xl font-bold leading-snug">{rally.name}</h1>
-          {rally.description && (
+          <h1
+            className={`${dense ? "text-xl" : "text-2xl"} font-bold leading-snug`}
+            style={{ fontFamily: headingFont(t) }}
+          >
+            {rally.name}
+          </h1>
+          {rally.description && !dense && (
             <p className="text-sm leading-relaxed" style={{ color: t.sub }}>
               {rally.description}
             </p>
@@ -381,8 +445,8 @@ export default function RallyApp({
         <ProgressBar theme={t} count={stampCount} required={rally.requiredCount} />
 
         <section
-          className="mt-6 rounded-2xl p-5"
-          style={{ background: t.panel, border: `1px solid ${t.line}` }}
+          className="mt-6 p-5"
+          style={{ background: t.panel, border: `1px solid ${t.line}`, borderRadius: t.radius }}
         >
           <div className="grid grid-cols-3 gap-4">
             {spots.map((spot, i) => (
@@ -417,10 +481,11 @@ export default function RallyApp({
             return (
               <li
                 key={spot.id}
-                className="rounded-2xl p-4"
+                className="p-4"
                 style={{
                   background: t.panel,
                   border: `1px solid ${t.line}`,
+                  borderRadius: t.radius,
                   opacity: stamped ? 0.72 : 1,
                 }}
               >
@@ -494,13 +559,25 @@ export default function RallyApp({
           </p>
         )}
 
-        <div className="mt-8 flex justify-center gap-4 text-xs" style={{ color: t.sub }}>
+        <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs" style={{ color: t.sub }}>
           <button onClick={() => setShowCodeInput(true)} className="underline underline-offset-4">
             合言葉を入力
           </button>
           <button onClick={() => setShowRestore(true)} className="underline underline-offset-4">
             機種変更の引き継ぎ
           </button>
+          {isEmbed && (
+            // 埋め込み先のiframeにカメラや位置情報の権限が付いていない場合の逃げ道。
+            // ここから開いた先でも同じスタンプ帳が続く。
+            <a
+              href={fullUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="underline underline-offset-4"
+            >
+              フル画面で開く
+            </a>
+          )}
         </div>
 
         {state?.restoreCode && (
@@ -511,7 +588,9 @@ export default function RallyApp({
       </div>
 
       {message && (
-        <div className="fixed inset-x-0 bottom-6 z-40 flex justify-center px-6">
+        <div
+          className={`${isEmbed ? "absolute" : "fixed"} inset-x-0 bottom-6 z-40 flex justify-center px-6`}
+        >
           <p
             className="rounded-full px-5 py-2.5 text-sm shadow-lg"
             style={{ background: t.ink, color: t.bg }}
@@ -576,7 +655,7 @@ export default function RallyApp({
   );
 }
 
-type Theme = (typeof THEMES)[AttendRallyTheme];
+type Theme = RallyTheme;
 
 function ProgressBar({ theme, count, required }: { theme: Theme; count: number; required: number }) {
   const pct = required > 0 ? Math.min(100, Math.round((count / required) * 100)) : 0;
@@ -617,25 +696,31 @@ function StampSlot({
   stamped: boolean;
 }) {
   // 傾きは升目ごとに固定（毎回変わると「押し直された」ように見えるため）。
-  const tilt = ((index * 37) % 17) - 8;
+  // 真四角のテーマ（モノトーン・商店街）は傾けず、判子らしさより整列を優先する。
+  const tilt = theme.stampShape === "square" ? 0 : ((index * 37) % 17) - 8;
+  const radius = stampRadius(theme.stampShape);
   return (
     <div className="flex flex-col items-center gap-1.5">
       <div
-        className="relative flex h-20 w-20 items-center justify-center rounded-full"
+        className="relative flex h-20 w-20 items-center justify-center"
         style={{
+          borderRadius: radius,
           border: stamped ? "none" : `2px dashed ${theme.line}`,
           background: stamped ? "transparent" : theme.bg,
         }}
       >
         {stamped ? (
           <div
-            className="flex h-full w-full items-center justify-center rounded-full"
+            className="flex h-full w-full items-center justify-center"
             style={{
+              borderRadius: radius,
               transform: `rotate(${tilt}deg)`,
               border: `3px solid ${spot.stampColor}`,
               color: spot.stampColor,
               background: "transparent",
-              boxShadow: `inset 0 0 0 2px ${spot.stampColor}22`,
+              boxShadow: theme.glow
+                ? `0 0 12px ${spot.stampColor}66, inset 0 0 0 2px ${spot.stampColor}22`
+                : `inset 0 0 0 2px ${spot.stampColor}22`,
             }}
           >
             <span className="px-1 text-center text-[15px] font-black leading-tight">
@@ -684,6 +769,7 @@ function Sheet({
 // 現地へ向かっている間の画面。圏内に入ると自動でスタンプが押される。
 function SpotScreen({
   theme,
+  isEmbed,
   spot,
   distance,
   accuracy,
@@ -693,6 +779,7 @@ function SpotScreen({
   onOpenCode,
 }: {
   theme: Theme;
+  isEmbed: boolean;
   spot: RallySpotView;
   distance: number | null;
   accuracy: number | null;
@@ -702,12 +789,20 @@ function SpotScreen({
   onOpenCode: () => void;
 }) {
   return (
-    <div className="min-h-screen px-6 py-8" style={{ background: theme.bg, color: theme.ink }}>
+    <div
+      className={`${isEmbed ? "w-full" : "min-h-screen"} px-6 py-8`}
+      style={{
+        background: theme.bg,
+        color: theme.ink,
+        backgroundImage: theme.pattern ?? undefined,
+        borderRadius: isEmbed ? theme.radius : undefined,
+      }}
+    >
       <button onClick={onBack} className="text-sm" style={{ color: theme.sub }}>
         ← スタンプ帳へ戻る
       </button>
 
-      <div className="mx-auto mt-16 max-w-sm text-center">
+      <div className={`mx-auto max-w-sm text-center ${isEmbed ? "mt-8" : "mt-16"}`}>
         <p className="text-xs tracking-[0.3em]" style={{ color: theme.sub }}>
           NEXT SPOT
         </p>
@@ -768,12 +863,15 @@ function StampGetOverlay({
   total,
   completed,
   onClose,
+  arHref,
 }: {
   spot: RallySpotView;
   count: number;
   total: number;
   completed: boolean;
   onClose: () => void;
+  /** 埋め込み中はここにフル画面のURLが入り、ARを別タブで開く導線になる。 */
+  arHref: string | null;
 }) {
   return (
     <div className="flex h-full w-full flex-col items-center justify-between px-6 py-10 text-white">
@@ -803,6 +901,16 @@ function StampGetOverlay({
         >
           {completed ? "コンプリート特典へ" : "スタンプ帳へ戻る"}
         </button>
+        {arHref && spot.modelUrl && (
+          <a
+            href={arHref}
+            target="_blank"
+            rel="noreferrer"
+            className="block w-full rounded-xl border border-white/60 py-3 text-sm font-bold text-white"
+          >
+            ARで見る（別タブで開きます）
+          </a>
+        )}
       </div>
 
       <style>{`@keyframes stampIn {
@@ -939,12 +1047,14 @@ function CompleteScreen({
   rally,
   spots,
   state,
+  isEmbed,
   onBack,
 }: {
   theme: Theme;
   rally: RallyView;
   spots: RallySpotView[];
   state: RallyState | null;
+  isEmbed: boolean;
   onBack: () => void;
 }) {
   const [showAr, setShowAr] = useState(false);
@@ -1013,7 +1123,15 @@ function CompleteScreen({
   }
 
   return (
-    <div className="min-h-screen px-6 py-8" style={{ background: theme.bg, color: theme.ink }}>
+    <div
+      className={`${isEmbed ? "w-full" : "min-h-screen"} px-6 py-8`}
+      style={{
+        background: theme.bg,
+        color: theme.ink,
+        backgroundImage: theme.pattern ?? undefined,
+        borderRadius: isEmbed ? theme.radius : undefined,
+      }}
+    >
       <button onClick={onBack} className="text-sm" style={{ color: theme.sub }}>
         ← スタンプ帳へ戻る
       </button>
@@ -1023,7 +1141,9 @@ function CompleteScreen({
           <p className="text-xs tracking-[0.4em]" style={{ color: theme.sub }}>
             COMPLETE
           </p>
-          <h2 className="mt-2 text-2xl font-bold">{rally.rewardMessage}</h2>
+          <h2 className="mt-2 text-2xl font-bold" style={{ fontFamily: headingFont(theme) }}>
+            {rally.rewardMessage}
+          </h2>
         </div>
 
         {cardUrl && (
@@ -1044,14 +1164,26 @@ function CompleteScreen({
           >
             記念カードを保存 / 共有
           </button>
-          <button
-            onClick={() => setShowAr(true)}
-            disabled={!rally.rewardModelUrl}
-            className="rounded-xl py-3 text-sm font-bold disabled:opacity-40"
-            style={{ background: theme.panel, color: theme.ink, border: `1px solid ${theme.line}` }}
-          >
-            記念ARを見る
-          </button>
+          {isEmbed ? (
+            <a
+              href={`/r/${rally.standaloneHash}`}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-xl py-3 text-center text-sm font-bold"
+              style={{ background: theme.panel, color: theme.ink, border: `1px solid ${theme.line}` }}
+            >
+              記念ARを見る
+            </a>
+          ) : (
+            <button
+              onClick={() => setShowAr(true)}
+              disabled={!rally.rewardModelUrl}
+              className="rounded-xl py-3 text-sm font-bold disabled:opacity-40"
+              style={{ background: theme.panel, color: theme.ink, border: `1px solid ${theme.line}` }}
+            >
+              記念ARを見る
+            </button>
+          )}
         </div>
 
         {rally.couponEnabled && state?.coupon && (

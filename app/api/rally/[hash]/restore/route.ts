@@ -24,6 +24,6 @@ export async function POST(req: Request, { params }: { params: { hash: string } 
   if (!data) return NextResponse.json({ error: "invalid_code" }, { status: 404 });
 
   const participant = data as AttendRallyParticipant;
-  setParticipantCookie(params.hash, participant.id);
+  setParticipantCookie(ctx, participant.id);
   return NextResponse.json(await buildState(ctx, participant));
 }

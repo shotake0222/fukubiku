@@ -74,5 +74,16 @@ export async function createDefaultRally(
   });
 
   await supabase.from("attend_rally_spots").insert(spots);
+
+  // 配布用URLを1本発行しておく。埋め込み用は必要になったときに管理画面から足す。
+  // attend_rallies.hash と同じ値をリンク表にも入れることで、
+  // ラリー本体のハッシュで開いても、リンク経由で開いても同じ扱いになる。
+  await supabase.from("attend_rally_links").insert({
+    rally_id: created.id,
+    hash: created.hash,
+    name: "配布用URL",
+    mode: "standalone",
+  });
+
   return created;
 }

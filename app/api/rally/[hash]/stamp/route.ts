@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { distanceMeters, isWithinPeriod, normalizeCode } from "@/lib/rally";
-import { buildState, ensureParticipant, loadRally } from "@/lib/rallyServer";
+import { buildState, ensureParticipant, loadRally, participantIdFromHeader } from "@/lib/rallyServer";
 import type { AttendRallySpot, AttendStampMethod } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -70,7 +70,7 @@ export async function POST(req: Request, { params }: { params: { hash: string } 
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   }
 
-  const participant = await ensureParticipant(ctx, params.hash);
+  const participant = await ensureParticipant(ctx, participantIdFromHeader(req));
 
   const { error } = await ctx.supabase.from("attend_rally_stamps").insert({
     participant_id: participant.id,

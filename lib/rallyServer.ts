@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
+  PARTICIPANT_HEADER,
   generateCouponCode,
   generateRestoreCode,
   participantCookieName,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/rally";
 import type {
   AttendRally,
+  AttendRallyLink,
   AttendRallyParticipant,
   AttendRallyReward,
   AttendRallySpot,
@@ -24,15 +26,32 @@ export interface RallyContext {
   supabase: Supabase;
   rally: AttendRally;
   spots: AttendRallySpot[];
+  /** どの公開URLから開かれたか。旧URL(attend_rallies.hash)直打ちの場合は null。 */
+  link: AttendRallyLink | null;
 }
 
+/**
+ * 公開URLのハッシュからラリーを引く。
+ *
+ * まず発行済みURL(attend_rally_links)を見て、無ければ attend_rallies.hash を見る。
+ * リンク表を導入する前に配ったURLをそのまま生かすための二段構え。
+ * 停止(enabled=false)されたURLは見つからなかった扱いにする。
+ */
 export async function loadRally(hash: string): Promise<RallyContext | null> {
   const supabase = createAdminClient();
-  const { data: rally } = await supabase
-    .from("attend_rallies")
+
+  const { data: linkRow } = await supabase
+    .from("attend_rally_links")
     .select("*")
     .eq("hash", hash)
     .maybeSingle();
+
+  const link = (linkRow as AttendRallyLink | null) ?? null;
+  if (link && !link.enabled) return null;
+
+  const { data: rally } = link
+    ? await supabase.from("attend_rallies").select("*").eq("id", link.rally_id).maybeSingle()
+    : await supabase.from("attend_rallies").select("*").eq("hash", hash).maybeSingle();
   if (!rally) return null;
 
   const { data: spots } = await supabase
@@ -45,33 +64,50 @@ export async function loadRally(hash: string): Promise<RallyContext | null> {
     supabase,
     rally: rally as AttendRally,
     spots: ((spots as AttendRallySpot[] | null) ?? []),
+    link,
   };
 }
 
 /** Cookieに入っている参加者IDを取り出す（存在確認まではしない）。 */
-export function participantIdFromCookie(rallyHash: string): string | null {
-  return cookies().get(participantCookieName(rallyHash))?.value ?? null;
+export function participantIdFromCookie(rallyId: string): string | null {
+  return cookies().get(participantCookieName(rallyId))?.value ?? null;
 }
 
-export function setParticipantCookie(rallyHash: string, participantId: string) {
-  cookies().set(participantCookieName(rallyHash), participantId, {
+export function setParticipantCookie(ctx: RallyContext, participantId: string) {
+  // 埋め込み(iframe)ではサードパーティ扱いになるため SameSite=None が要る。
+  // ただし SameSite=None は Secure 必須で、http のローカル確認では落ちてしまうので
+  // 本番だけ None にする（ローカルは同一オリジンなので lax で足りる）。
+  const isEmbed = ctx.link?.mode === "embed";
+  const isProd = process.env.NODE_ENV === "production";
+  cookies().set(participantCookieName(ctx.rally.id), participantId, {
     httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
+    sameSite: isEmbed && isProd ? "none" : "lax",
+    secure: isProd,
     path: "/",
     maxAge: COOKIE_MAX_AGE,
   });
 }
 
 /**
- * Cookieの参加者を取得する。無ければ作る（= URLを開いた時点で自動参加）。
- * 参加者IDはCookieにしか置かないので、他人のスタンプ帳を覗くことはできない。
+ * 埋め込み用のヘッダから参加者IDを取り出す。
+ * ブラウザがサードパーティCookieを落としてもスタンプ帳が続くようにするための経路で、
+ * 値そのものが「自分の帳面を開く合鍵」になる（推測できないUUID）。
+ */
+export function participantIdFromHeader(req: Request): string | null {
+  const raw = req.headers.get(PARTICIPANT_HEADER);
+  if (!raw) return null;
+  return /^[0-9a-f-]{36}$/i.test(raw) ? raw : null;
+}
+
+/**
+ * 参加者を取得する。無ければ作る（= URLを開いた時点で自動参加）。
+ * Cookieが無い場合だけ fallbackId（埋め込み用ヘッダの値）を見る。
  */
 export async function ensureParticipant(
   ctx: RallyContext,
-  rallyHash: string
+  fallbackId?: string | null
 ): Promise<AttendRallyParticipant> {
-  const existingId = participantIdFromCookie(rallyHash);
+  const existingId = participantIdFromCookie(ctx.rally.id) ?? fallbackId ?? null;
   if (existingId) {
     const { data } = await ctx.supabase
       .from("attend_rally_participants")
@@ -80,6 +116,8 @@ export async function ensureParticipant(
       .eq("rally_id", ctx.rally.id)
       .maybeSingle();
     if (data) {
+      // ヘッダ経由で名乗ってきた場合、Cookieが使える環境なら書き直しておく。
+      setParticipantCookie(ctx, (data as AttendRallyParticipant).id);
       // 最終アクセス日時だけ更新しておく（運営側の参加状況の目安になる）。
       await ctx.supabase
         .from("attend_rally_participants")
@@ -97,7 +135,7 @@ export async function ensureParticipant(
       .select("*")
       .single();
     if (data) {
-      setParticipantCookie(rallyHash, (data as AttendRallyParticipant).id);
+      setParticipantCookie(ctx, (data as AttendRallyParticipant).id);
       return data as AttendRallyParticipant;
     }
     if (error && error.code !== "23505") throw new Error(error.message);
