@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import type {
   AttendDisplayType,
   AttendExperienceStatus,
@@ -290,6 +289,19 @@ function TriggerCard({
   const [markerUploading, setMarkerUploading] = useState(false);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [locating, setLocating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addingObject, setAddingObject] = useState(false);
@@ -410,11 +422,6 @@ function TriggerCard({
 
   return (
     <div className="border rounded-xl p-4 space-y-4 bg-white">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <div className="flex items-center justify-between gap-3">
         <input
@@ -562,7 +569,11 @@ function TriggerCard({
             disabled={!mindarReady}
             onChange={(e) => e.target.files?.[0] && handleTargetImageUpload(e.target.files[0])}
           />
-          {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+          {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
           {compileProgress !== null && <p className="text-xs text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>}
           {selectedMindarMarker && selectedMindarMarker.images.length > 0 ? (
             <div className="space-y-1">

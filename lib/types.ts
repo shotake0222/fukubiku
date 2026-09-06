@@ -155,6 +155,10 @@ export interface Order {
   target_image_url: string | null;
   mind_file_url: string | null;
 
+  /** 共有URLの再表示クールダウン時間(時間単位)。null なら既定値(DRAW_COOLDOWN_HOURS)、
+   * 0 なら制限なし。抽選セット側の draw_groups.cooldown_hours と同じ役割。 */
+  cooldown_hours: number | null;
+
   created_at: string;
   updated_at: string;
 }

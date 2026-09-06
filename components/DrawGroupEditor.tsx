@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import { DRAW_COOLDOWN_HOURS } from "@/lib/drawCooldown";
 import type { DisplayType, DrawGroup, DrawGroupEntry, ObjectSource, PresetObject } from "@/lib/types";
 import { DEFAULT_TIER_WEIGHTS, PRESET_CATEGORIES } from "@/lib/types";
@@ -115,6 +114,19 @@ export default function DrawGroupEditor({
   const [targetImageUrl, setTargetImageUrl] = useState(group.target_image_url);
   const [mindFileUrl, setMindFileUrl] = useState(group.mind_file_url);
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
 
   // 基本の流れは作成画面と同じ:「テンプレートは景品ごとに個別設定できるが、通常は不要」。
@@ -301,11 +313,6 @@ export default function DrawGroupEditor({
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">抽選セット編集: {group.client_name || "(未設定)"}</h1>
@@ -391,7 +398,11 @@ export default function DrawGroupEditor({
               disabled={!mindarReady}
               onChange={(e) => e.target.files?.[0] && handleTargetImageUpload(e.target.files[0])}
             />
-            {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+            {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
             {compileProgress !== null && (
               <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>
             )}

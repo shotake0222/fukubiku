@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import OrderDetailsForm, { type OrderDetailsValue } from "@/components/OrderDetailsForm";
 import type { DisplayType, ObjectSource, Order, PresetObject } from "@/lib/types";
 import { PRESET_CATEGORIES } from "@/lib/types";
@@ -42,6 +41,7 @@ export default function OrderEditor({
     person_in_charge: order.person_in_charge ?? "",
     quantity: order.quantity != null ? String(order.quantity) : "",
     renewal_check_date: order.renewal_check_date ?? "",
+    cooldown_hours: order.cooldown_hours != null ? String(order.cooldown_hours) : "",
     notes: order.notes ?? "",
   });
 
@@ -56,6 +56,19 @@ export default function OrderEditor({
   const [modelUploading, setModelUploading] = useState(false);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copyOk, setCopyOk] = useState(false);
@@ -142,6 +155,7 @@ export default function OrderEditor({
         person_in_charge: details.person_in_charge || null,
         quantity: details.quantity ? Number(details.quantity) : null,
         renewal_check_date: details.renewal_check_date || null,
+        cooldown_hours: details.cooldown_hours === "" ? null : Number(details.cooldown_hours),
         notes: details.notes || null,
         display_type: displayType,
         object_source: objectSource,
@@ -169,11 +183,6 @@ export default function OrderEditor({
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-bold">注文編集: {order.client_name || "(未設定)"}</h1>
@@ -297,7 +306,11 @@ export default function OrderEditor({
             disabled={!mindarReady}
             onChange={(e) => e.target.files?.[0] && handleTargetImageUpload(e.target.files[0])}
           />
-          {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+          {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
           {compileProgress !== null && (
             <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>
           )}

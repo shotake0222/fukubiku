@@ -1,0 +1,11 @@
+-- 注文(orders)ごとに「再表示までの間隔(時間)」を設定できるようにする。
+--
+-- 共有URLは誰でも何度でも開けてしまうため、Cookieに前回表示した時刻を記録し、
+-- 一定時間は再表示せず「時間をおいて再チャレンジ」と案内する仕組みがある
+-- (lib/drawCooldown.ts)。これまで抽選セット(draw_groups.cooldown_hours)だけが
+-- 設定可能で、注文側は既定値の1時間に固定されていた。
+-- 実際の注文でも間隔を変えたいという要望があるため、注文にも同じ列を持たせる。
+--
+-- null の場合はアプリ側の既定値(DRAW_COOLDOWN_HOURS = 1時間)を使う。
+-- 0 を指定すると Cookie による制限は無効(何度でも表示可)になる。
+alter table orders add column if not exists cooldown_hours numeric;

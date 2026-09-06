@@ -491,7 +491,10 @@ export async function GET(
   // (以前は抽選セットのみに適用していたため、注文URLでは何も起きなかった)
   const cookieName = drawCookieName(params.hash);
   const decoded = decodeDrawCookieValue(cookies().get(cookieName)?.value);
-  const cooldownHours = group?.cooldown_hours ?? DRAW_COOLDOWN_HOURS;
+  // クールダウン時間は注文/抽選セットそれぞれの設定値を使う。
+  // 未設定(null)なら既定値、0なら「制限なし」(何度でも表示できる)。
+  const configuredCooldown = order ? order.cooldown_hours : group!.cooldown_hours;
+  const cooldownHours = configuredCooldown ?? DRAW_COOLDOWN_HOURS;
   const remainingMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs, cooldownHours) : 0;
   const displayType = order ? order.display_type : group!.display_type;
   const mindFileUrl = order ? order.mind_file_url : group!.mind_file_url;
@@ -515,13 +518,17 @@ export async function GET(
     });
   }
 
-  const buildSetCookie = (category: string | null): string =>
-    cookieName +
-    "=" +
-    encodeDrawCookieValue(category) +
-    "; Max-Age=" +
-    Math.round(cooldownHours * 3600) +
-    "; Path=/; SameSite=Lax";
+  // 0(制限なし)のときはCookie自体を発行しない。
+  // 営業デモのように同じ端末で何度も見せ直す用途で使う。
+  const buildSetCookie = (category: string | null): string | undefined =>
+    cooldownHours > 0
+      ? cookieName +
+        "=" +
+        encodeDrawCookieValue(category) +
+        "; Max-Age=" +
+        Math.round(cooldownHours * 3600) +
+        "; Path=/; SameSite=Lax"
+      : undefined;
 
   // 1) 注文(orders): 1件に固定の景品が割り当てられているフロー
   if (order) {

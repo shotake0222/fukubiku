@@ -29,6 +29,7 @@ export default function NewOrderPage() {
         person_in_charge: value.person_in_charge || null,
         quantity: value.quantity ? Number(value.quantity) : null,
         renewal_check_date: value.renewal_check_date || null,
+        cooldown_hours: value.cooldown_hours === "" ? null : Number(value.cooldown_hours),
         notes: value.notes || null,
         display_type: "aframe",
         object_source: "preset",

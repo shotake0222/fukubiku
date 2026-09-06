@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
 import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
@@ -79,11 +78,27 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   const [dueDate, setDueDate] = useState("");
   const [personInCharge, setPersonInCharge] = useState("");
   const [renewalCheckDate, setRenewalCheckDate] = useState("");
+  // 再表示までの間隔(時間)。空欄なら既定値(1時間)、"0" なら制限なし。
+  // 一括作成ではこの設定を作成するすべての注文に同じ値で適用する。
+  const [cooldownHours, setCooldownHours] = useState("");
   const [notes, setNotes] = useState("");
   const [displayType, setDisplayType] = useState<DisplayType>("aframe");
 
   const [targetFile, setTargetFile] = useState<File | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [compiledTargetUrl, setCompiledTargetUrl] = useState<string | null>(null);
   const [compiledMindUrl, setCompiledMindUrl] = useState<string | null>(null);
@@ -215,6 +230,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
           person_in_charge: personInCharge || null,
           quantity: row.quantity ? Number(row.quantity) : null,
           renewal_check_date: renewalCheckDate || null,
+          cooldown_hours: cooldownHours === "" ? null : Number(cooldownHours),
           notes: notes || null,
           display_type: displayType,
           object_source: row.objectSource,
@@ -298,11 +314,6 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <h1 className="text-lg font-bold">景品セット一括作成</h1>
       <p className="text-sm text-slate-500">
@@ -357,6 +368,23 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
               className="input"
             />
           </label>
+          <label className="space-y-1 block">
+            <span className="text-sm font-medium">再表示までの間隔(時間)</span>
+            <input
+              type="number"
+              min="0"
+              step="0.5"
+              placeholder="未入力なら1時間"
+              value={cooldownHours}
+              onChange={(e) => setCooldownHours(e.target.value)}
+              className="input"
+            />
+            <span className="text-xs text-slate-400 block">
+              同じ人が共有URLを開き直しても、この時間が経つまでは結果を出さず
+              「時間をおいて再チャレンジ」と案内します。0 で制限なし。
+              ここで作成するすべての注文に同じ値が入ります。
+            </span>
+          </label>
           <label className="space-y-1 block sm:col-span-2">
             <span className="text-sm font-medium">備考</span>
             <textarea value={notes} onChange={(e) => setNotes(e.target.value)} className="input" rows={2} />
@@ -390,7 +418,11 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
               disabled={!mindarReady}
               onChange={(e) => e.target.files?.[0] && handleTargetUpload(e.target.files[0])}
             />
-            {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+            {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
             {compileProgress !== null && (
               <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>
             )}

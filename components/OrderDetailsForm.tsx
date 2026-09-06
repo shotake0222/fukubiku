@@ -10,6 +10,8 @@ export interface OrderDetailsValue {
   person_in_charge: string;
   quantity: string;
   renewal_check_date: string;
+  /** 再表示までの間隔(時間)。空欄なら既定値(1時間)、"0" なら制限なし。 */
+  cooldown_hours: string;
   notes: string;
 }
 
@@ -23,6 +25,7 @@ export function emptyOrderDetails(): OrderDetailsValue {
     person_in_charge: "",
     quantity: "",
     renewal_check_date: "",
+    cooldown_hours: "",
     notes: "",
   };
 }
@@ -110,6 +113,21 @@ export default function OrderDetailsForm({
             自動計算
           </button>
         </div>
+      </Field>
+      <Field label="再表示までの間隔（時間）">
+        <input
+          type="number"
+          min={0}
+          step={0.5}
+          placeholder="未入力なら1時間"
+          value={value.cooldown_hours}
+          onChange={(e) => set({ cooldown_hours: e.target.value })}
+          className="input"
+        />
+        <span className="text-xs text-slate-400 block mt-1">
+          同じ人が共有URLを開き直しても、この時間が経つまでは結果を出さず
+          「時間をおいて再チャレンジ」と案内します。0 で制限なし（何度でも表示）。
+        </span>
       </Field>
       <Field label="備考" full>
         <textarea

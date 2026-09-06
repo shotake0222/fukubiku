@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTargets, loadImageElement, loadImageElementFromUrl } from "@/lib/mindCompiler";
+import { compileMindTargets, loadImageElement, loadImageElementFromUrl, ensureMindArCompiler } from "@/lib/mindCompiler";
 import type { AttendMarkerType, AttendMarkerWithProject, AttendProject } from "@/lib/types";
 
 const ASSET_BUCKET = "assets";
@@ -50,6 +49,19 @@ export default function AttendMarkerManager({
   const [targetImageFiles, setTargetImageFiles] = useState<File[]>([]);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -242,11 +254,6 @@ export default function AttendMarkerManager({
 
   return (
     <div className="max-w-4xl space-y-6">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <h1 className="text-lg font-bold">マーカー管理</h1>
       <p className="text-xs text-slate-500">
@@ -335,7 +342,11 @@ export default function AttendMarkerManager({
             <p className="text-xs text-slate-500">
               アップロードすると自動で1つの.mindファイルにまとめてコンパイルされます。あとから画像を追加登録することもできます。
             </p>
-            {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+            {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
             {compileProgress !== null && <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>}
           </div>
         )}

@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import Script from "next/script";
+import { useMemo, useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { compileMindTarget } from "@/lib/mindCompiler";
+import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import { generateHash } from "@/lib/hash";
 import {
   DEFAULT_TIER_WEIGHTS,
@@ -86,6 +85,19 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
   const [displayType, setDisplayType] = useState<DisplayType>("aframe");
 
   const [mindarReady, setMindarReady] = useState(false);
+  const [mindarError, setMindarError] = useState<string | null>(null);
+
+  // MindARのコンパイラはESモジュールのため、通常の<script>では読み込めない
+  // (詳細は lib/mindCompiler.ts のコメント)。専用ローダーで読み込む。
+  useEffect(() => {
+    let alive = true;
+    ensureMindArCompiler()
+      .then(() => alive && setMindarReady(true))
+      .catch((e) => alive && setMindarError(e instanceof Error ? e.message : String(e)));
+    return () => {
+      alive = false;
+    };
+  }, []);
   const [compileProgress, setCompileProgress] = useState<number | null>(null);
   const [compiledTargetUrl, setCompiledTargetUrl] = useState<string | null>(null);
   const [compiledMindUrl, setCompiledMindUrl] = useState<string | null>(null);
@@ -247,11 +259,6 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Script
-        src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js"
-        strategy="afterInteractive"
-        onLoad={() => setMindarReady(true)}
-      />
 
       <h1 className="text-lg font-bold">営業デモ</h1>
       <p className="text-sm text-slate-500">
@@ -329,7 +336,11 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
               disabled={!mindarReady}
               onChange={(e) => e.target.files?.[0] && handleTargetUpload(e.target.files[0])}
             />
-            {!mindarReady && <p className="text-xs text-slate-400">コンパイラを読み込み中...</p>}
+            {!mindarReady && (
+              <p className={mindarError ? "text-xs text-red-600" : "text-xs text-slate-400"}>
+                {mindarError ?? "コンパイラを読み込み中..."}
+              </p>
+            )}
             {compileProgress !== null && (
               <p className="text-sm text-slate-500">コンパイル中... {Math.round(compileProgress)}%</p>
             )}
