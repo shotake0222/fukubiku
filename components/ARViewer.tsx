@@ -566,7 +566,7 @@ export default function ARViewer({
           // 「カメラ映像は出るがマーカーにまったく反応せず、エラーも出ない」状態になる。
           // 回線やDNS、拡張機能の影響を受けるため端末差が出やすい(スマホだけ動かない典型)。
           // ファイルは176バイトと小さいので同一オリジンに同梱して外部依存をなくす。
-          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat; maxDetectionRate: 30;"
+          arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono; trackingMethod: best; patternRatio: 0.9; cameraParametersUrl: /vendor/camera_para.dat;"
           // 実機のスマホで確実に動いた単体テストページ(ar-test.html)と同じ指定にする。
           // preserveDrawingBuffer は撮影のために一度追加したが、モバイルのGPUでは
           // canvasの合成のされ方が変わり、透過するはずのcanvasが不透明になって
@@ -577,18 +577,18 @@ export default function ARViewer({
         >
           {/* preset="custom" は旧実装と同じ指定。省略時の既定プリセットに
               引きずられないよう、独自パターンを使うことを明示しておく。 */}
-          {/* smooth系: AR.jsの姿勢スムージング。1フレームでも検出を外すと
-              オブジェクトが消えてチカチカするため、数フレーム分を平均して安定させる。
-              marker-hold: 一度検出できたら、以降は最後の姿勢のまま表示を保ち続ける。
-              マーカー(筐体)は変更できないため、多少ずれても映り続けることを優先する。 */}
+          {/* AR.jsの姿勢スムージング(smooth系)は指定しない。
+              AR.jsの実装では smoothCount+1 フレーム分の検出が溜まるまで姿勢行列を
+              適用しないため、検出が途切れがちなマーカーではバッファが埋まらず
+              いつまでも表示されない状態になりうる。実機でマーカーを27回検出できた
+              テストページにもこの指定は無かったため、同じ構成に戻す。
+              ちらつき対策は marker-hold 側で行う。こちらは「一度検出できたら
+              最後の姿勢のまま表示を保ち続ける」だけの処理で、表示を止める方向には
+              働かないため、検出の妨げにならない。 */}
           <a-marker
             preset="custom"
             type="pattern"
             url={marker}
-            smooth="true"
-            smoothCount="10"
-            smoothTolerance="0.01"
-            smoothThreshold="5"
             marker-hold="ms: 0"
             ref={targetElRef}
           >
