@@ -15,7 +15,6 @@ import {
   registerAlphaVideoComponent,
   registerCenterModelComponent,
   registerGifImageComponent,
-  registerMarkerHoldComponent,
 } from "./arObjectComponents";
 import {
   DRAW_COOLDOWN_HOURS,
@@ -149,7 +148,6 @@ export default function ARViewer({
       registerGifImageComponent(AFRAME);
       registerAlphaVideoComponent(AFRAME);
       registerCenterModelComponent(AFRAME);
-      registerMarkerHoldComponent(AFRAME);
       registeredRef.current = true;
     }
   }, [aframeLoaded]);
@@ -577,21 +575,20 @@ export default function ARViewer({
         >
           {/* preset="custom" は旧実装と同じ指定。省略時の既定プリセットに
               引きずられないよう、独自パターンを使うことを明示しておく。 */}
-          {/* AR.jsの姿勢スムージング(smooth系)は指定しない。
-              AR.jsの実装では smoothCount+1 フレーム分の検出が溜まるまで姿勢行列を
-              適用しないため、検出が途切れがちなマーカーではバッファが埋まらず
-              いつまでも表示されない状態になりうる。実機でマーカーを27回検出できた
-              テストページにもこの指定は無かったため、同じ構成に戻す。
-              ちらつき対策は marker-hold 側で行う。こちらは「一度検出できたら
-              最後の姿勢のまま表示を保ち続ける」だけの処理で、表示を止める方向には
-              働かないため、検出の妨げにならない。 */}
-          <a-marker
-            preset="custom"
-            type="pattern"
-            url={marker}
-            marker-hold="ms: 0"
-            ref={targetElRef}
-          >
+          {/* 実機のスマホでマーカーを検出できたテストページ(ar-test.html)と
+              まったく同じ指定にする。ここに追加の調整を入れると表示されなくなる
+              事例が続いたため、余計な指定は持たせない方針とする。
+
+              過去に試して外したもの:
+              - smooth系(姿勢スムージング): smoothCount+1フレーム分の検出が
+                溜まるまで姿勢を適用しないため、検出が途切れがちなマーカーでは
+                いつまでも表示されない。
+              - marker-hold(検出が外れても表示を保つ独自コンポーネント):
+                AR.jsはchangeMatrixMode:modelViewMatrixで動作し、マーカーの姿勢は
+                カメラからの相対位置になる。検出が外れた状態で表示を保つと、
+                オブジェクトが画面に貼り付いたまま固定され、直前の姿勢がカメラに
+                近かった場合は画面全体を覆ってしまう(ブラックアウトの原因)。 */}
+          <a-marker preset="custom" type="pattern" url={marker} ref={targetElRef}>
             <ObjectEntity
               url={modelUrl}
               scale={scale}

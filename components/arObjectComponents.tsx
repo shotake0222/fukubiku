@@ -123,39 +123,6 @@ export function registerCenterModelComponent(AFRAME: any) {
   });
 }
 
-// マーカーの追跡が途切れるとオブジェクトが消えてしまう問題への対策。
-// AR.jsは検出できなかったフレームで即座に非表示にするため、手ブレ・ピンボケ・
-// 照明の映り込みなどで簡単に消える。マーカー(筐体)の仕様は変更できないため、
-// アプリ側で「一度検出できたら、その姿勢のまま表示を保ち続ける」方針にする。
-// 抽選結果を見せる用途では、映り続けることのほうが姿勢の正確さより重要で、
-// 写真撮影(タイムスタンプ入り)も落ち着いて行える。
-//   ms > 0 : 最後に検出できてからその時間だけ保持する
-//   ms = 0 : 一度検出できたら保持し続ける(既定)
-export function registerMarkerHoldComponent(AFRAME: any) {
-  if (AFRAME.components["marker-hold"]) return;
-  AFRAME.registerComponent("marker-hold", {
-    schema: { ms: { type: "number", default: 0 } },
-    init() {
-      this.lastSeen = 0;
-      this.everSeen = false;
-    },
-    tick() {
-      const now = performance.now();
-      if (this.el.object3D.visible) {
-        // 検出できているフレーム: 最終検出時刻を更新するだけ
-        this.lastSeen = now;
-        this.everSeen = true;
-        return;
-      }
-      if (!this.everSeen) return;
-      // 検出できていないフレーム: 保持期間内(ms=0なら無期限)は表示を維持する
-      if (this.data.ms === 0 || now - this.lastSeen < this.data.ms) {
-        this.el.object3D.visible = true;
-      }
-    },
-  });
-}
-
 export function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
@@ -317,6 +284,17 @@ export function ObjectEntity({
 }) {
   const kind = assetKind(url);
   const rotation = rotationOverride || `0 ${rotationY} 0`;
+  // モデルに実際に適用する向き
+  const modelRotation = rotationOverride || (rotationY ? rotation : DEFAULT_MODEL_ROTATION);
+  // 「焦らし」演出の自動回転は、基準の向きを保ったままY軸だけ1周させる。
+  // 以前は無条件に "to: 0 360 0" としていたため、基準の向き(既定は -90 0 0)ごと
+  // 上書きされ、演出中はマーカー面に寝た状態へ倒れていってしまい、
+  // 特定の角度からしか見えない状態になっていた。
+  const [baseX, baseY, baseZ] = modelRotation
+    .trim()
+    .split(/\s+/)
+    .map((v) => Number(v) || 0);
+  const spinTo = `${baseX} ${baseY + 360} ${baseZ}`;
   const visibleAttr = visible ? "true" : "false";
   if (kind === "video") {
     return (
@@ -346,7 +324,7 @@ export function ObjectEntity({
       center-model=""
       position={position === "0 0.6 0" ? "0 0 0" : position}
       scale={scale || DEFAULT_MODEL_SCALE}
-      rotation={rotationOverride || (rotationY ? rotation : DEFAULT_MODEL_ROTATION)}
+      rotation={modelRotation}
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
       // クリップが無いモデルではanimation-mixerは何もしないため、外部フォールバックのanimationと共存できる。
       // loop=falseの場合は1回再生後に最終フレーム(結果バッジ表示状態)で停止したままにする。
@@ -367,7 +345,7 @@ export function ObjectEntity({
       animation={
         !loop || rotationY || rotationOverride
           ? undefined
-          : "property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+          : `property: rotation; to: ${spinTo}; loop: true; dur: 8000; easing: linear`
       }
       visible={visibleAttr}
     ></a-entity>
