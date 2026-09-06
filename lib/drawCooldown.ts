@@ -90,6 +90,14 @@ export const RETRY_MESSAGES: Record<string, string> = {
   receipt: "レジのロール紙を交換しています。次の挑戦まで あと{remaining}です。",
   ring: "輪はまだ拾い集めている途中です。次の挑戦まで あと{remaining}です。",
   safe: "金庫のダイヤルを掛け直しています。次の挑戦まで あと{remaining}です。",
+  fukubukuro: "福袋はただいま詰め直している最中です。次の挑戦まで あと{remaining}です。",
+  sakura: "桜は次の一輪を咲かせる準備中です。次の挑戦まで あと{remaining}です。",
+  mamemaki: "豆を升に補充しています。次の挑戦まで あと{remaining}です。",
+  otoshidama: "ぽち袋の用意が整うまでもう少しです。次の挑戦まで あと{remaining}です。",
+  crane: "アームの調整中です。次の挑戦まで あと{remaining}です。",
+  mogura: "もぐたちは巣穴でひと休み中です。次の挑戦まで あと{remaining}です。",
+  bowling: "ピンを並べ直しています。次の挑戦まで あと{remaining}です。",
+  makimono: "巻物はいま巻き直している途中です。次の挑戦まで あと{remaining}です。",
 };
 
 export const DEFAULT_RETRY_MESSAGE =

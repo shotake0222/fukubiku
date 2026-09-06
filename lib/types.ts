@@ -41,6 +41,14 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "receipt", label: "レシート" },
   { value: "ring", label: "輪投げ" },
   { value: "safe", label: "金庫" },
+  { value: "fukubukuro", label: "福袋" },
+  { value: "sakura", label: "桜" },
+  { value: "mamemaki", label: "豆まき" },
+  { value: "otoshidama", label: "お年玉" },
+  { value: "crane", label: "クレーンゲーム" },
+  { value: "mogura", label: "もぐらたたき" },
+  { value: "bowling", label: "ボウリング" },
+  { value: "makimono", label: "巻物" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";

@@ -521,6 +521,471 @@ def build_safe(cat, key, label):
     return b, [root]
 
 
+
+# ============================================================
+# 福袋 — 袋の口が開いて中から結果が飛び出す
+# ============================================================
+def build_fukubukuro(cat, key, label):
+    b = G.Builder()
+    cloth = tex.vgrad((512, 512), (214, 50, 54), (146, 18, 26))
+    d = ImageDraw.Draw(cloth)
+    for y in range(0, 512, 118):
+        d.rectangle([0, y, 512, y + 5], fill=(236, 206, 130))
+    cloth = tex.vignette(tex.grain(cloth, 7, 91), 0.34)
+    tex.draw_text(cloth, "福袋", (96, 176, 416, 344), fill=(250, 240, 214),
+                  stroke=(120, 14, 20), stroke_w=8, path=tex.FONT_SERIF)
+    t_cloth = b.add_texture(tex.to_png(cloth), "fukubukuro_cloth")
+    m_cloth = b.add_material("fukubukuro_cloth_mat", texture=t_cloth, roughness=0.78)
+    m_in = b.add_material("fukubukuro_inner_mat", color=(0.11, 0.03, 0.05, 1), roughness=0.95)
+    m_cord = b.add_material("fukubukuro_cord_mat", color=(0.92, 0.78, 0.32, 1), roughness=0.4)
+
+    # 袋本体(下が広い台形。凸形なので扇状に三角形分割できる)
+    body = G.poly([(-0.62, -0.72), (0.62, -0.72), (0.44, 0.42), (-0.44, 0.42)])
+    body_n = b.add_node("bag", mesh=b.add_mesh([G.prim(body, m_cloth)], "bag"))
+    inner = b.add_node("inner", mesh=b.add_mesh([
+        G.prim(G.poly([(-0.40, -0.60), (0.40, -0.60), (0.30, 0.44), (-0.30, 0.44)]), m_in)], "inner"),
+        t=(0, 0, -0.02))
+    # 口の左右のヒダ。外へ開く
+    mouth = G.poly([(-0.44, 0.0), (0.0, 0.0), (0.0, 0.34), (-0.44, 0.34)])
+    mL = b.add_node("mouthL_h", t=(-0.44, 0.42, 0.02))
+    mLn = b.add_node("mouthL", mesh=b.add_mesh([G.prim(G.offset(mouth, dx=0.44, dy=-0.42), m_cloth)], "mouthL"),
+                     t=(0, 0, 0))
+    b.nodes[mL]["children"] = [mLn]
+    mR = b.add_node("mouthR_h", t=(0.44, 0.42, 0.02))
+    mRn = b.add_node("mouthR", mesh=b.add_mesh([G.prim(G.offset(mouth, dx=0.0, dy=-0.42), m_cloth)], "mouthR"),
+                     t=(0, 0, 0))
+    b.nodes[mR]["children"] = [mRn]
+    cord = b.add_node("cord", mesh=b.add_mesh([G.prim(G.plane(0.98, 0.09), m_cord)], "cord"), t=(0, 0.40, 0.04))
+
+    children = [inner, body_n, mL, mR, cord]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.86)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, -0.1, 0.1), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": cord, "times": [0, 0.2, 0.4], "scale": [(1, 1, 1), (1, 1, 1), (0, 0, 0)]})
+        tracks.append({"node": mL, "times": [0, 0.35, 0.85],
+                       "rotation": [G.quat_axis((0, 0, 1), deg(a)) for a in (0, 0, 62)]})
+        tracks.append({"node": mR, "times": [0, 0.35, 0.85],
+                       "rotation": [G.quat_axis((0, 0, 1), deg(a)) for a in (0, 0, -62)]})
+        tracks.append({"node": badge, "times": [0, 0.6, 0.95, 1.15, 2.0],
+                       "scale": [(0, 0, 0), (0.2, 0.2, 0.2), (1.18, 1.18, 1.18), (1, 1, 1), (1, 1, 1)]})
+        tracks.append({"node": badge, "times": [0, 0.6, 1.0, 2.0],
+                       "translation": [(0, -0.1, 0.1), (0, -0.1, 0.1), (0, 0.5, 0.14), (0, 0.5, 0.14)]})
+    else:
+        tracks.append({"node": root, "times": [0, 0.55, 1.1, 1.65, 2.2],
+                       "scale": [(1, 1, 1), (1.05, 0.96, 1), (1, 1, 1), (1.05, 0.96, 1), (1, 1, 1)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# 桜 — 花びらが舞い散って結果が現れる
+# ============================================================
+def build_sakura(cat, key, label):
+    b = G.Builder()
+    petal = Image.new("RGB", (256, 256), (250, 214, 226))
+    dd = ImageDraw.Draw(petal)
+    dd.ellipse([16, 10, 240, 246], fill=(250, 196, 214))
+    dd.ellipse([56, 40, 200, 210], fill=(253, 226, 236))
+    petal = tex.grain(petal, 4, 101)
+    t_petal = b.add_texture(tex.to_png(petal, 64), "sakura_petal")
+    m_petal = b.add_material("sakura_petal_mat", texture=t_petal, roughness=0.7)
+    m_branch = b.add_material("sakura_branch_mat", color=(0.36, 0.24, 0.17, 1), roughness=0.85)
+    t_sky = b.add_texture(tex.to_png(tex.vgrad((512, 512), (238, 246, 252), (250, 232, 240))), "sakura_sky")
+    m_sky = b.add_material("sakura_sky_mat", texture=t_sky, roughness=0.95)
+
+    sky = b.add_node("sky", mesh=b.add_mesh([G.prim(G.disc(0.95, 32), m_sky)], "sky"), t=(0, 0.05, -0.14))
+    branch = b.add_node("branch", mesh=b.add_mesh([
+        G.prim(G.poly([(-1.0, 0.60), (1.0, 0.44), (1.0, 0.62), (-1.0, 0.80)]), m_branch),
+        G.prim(G.offset(G.poly([(-0.55, 0.28), (-0.30, 0.62), (-0.38, 0.66), (-0.63, 0.32)]), dz=0.001), m_branch),
+        G.prim(G.offset(G.poly([(0.30, 0.58), (0.58, 0.24), (0.66, 0.30), (0.38, 0.62)]), dz=0.001), m_branch),
+    ], "branch"), t=(0, 0, -0.05))
+
+    petal_mesh = b.add_mesh([G.prim(G.disc(0.19, 12), m_petal)], "petal")
+    petals = []
+    spots = [(-0.80, 0.60), (-0.52, 0.34), (-0.30, 0.66), (-0.05, 0.52), (0.22, 0.62),
+             (0.44, 0.36), (0.62, 0.60), (0.86, 0.50), (-0.66, 0.44), (0.06, 0.30)]
+    for i, (x, y) in enumerate(spots):
+        petals.append(b.add_node("petal%d" % i, mesh=petal_mesh, t=(x, y, 0.02)))
+
+    children = [sky, branch] + petals
+    tracks = []
+    bm, _ = add_badge(b, label, 0.92)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, -0.06, 0.1), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        # 花びらが風で舞い落ちる。左右に振れながら下へ
+        for i, n in enumerate(petals):
+            x, y = spots[i]
+            dx = 0.34 * (1 if i % 2 else -1)
+            tracks.append({"node": n, "times": [0, 0.12 + i * 0.05, 1.5],
+                           "translation": [(x, y, 0.02), (x, y, 0.02), (x + dx, -1.1, 0.02)]})
+            tracks.append({"node": n, "times": [0, 1.5],
+                           "rotation": [G.quat_axis((0, 0, 1), 0),
+                                        G.quat_axis((0, 0, 1), deg(420 * (1 if i % 2 else -1)))]})
+        tracks.append({"node": badge, "times": [0, 0.75, 1.0, 1.2, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.18, 1.18, 1.18), (1, 1, 1), (1, 1, 1)]})
+    else:
+        for i, n in enumerate(petals):
+            x, y = spots[i]
+            tracks.append({"node": n, "times": [0, 0.9, 1.8, 2.7],
+                           "translation": [(x, y, 0.02), (x, y + 0.05, 0.02), (x, y, 0.02), (x, y + 0.05, 0.02)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# 豆まき — 豆が飛んで鬼が退散し、結果が現れる
+# ============================================================
+def build_mamemaki(cat, key, label):
+    b = G.Builder()
+    t_masu = b.add_texture(tex.to_png(tex.wood((512, 512), (206, 172, 116), seed=111)), "masu_wood")
+    m_masu = b.add_material("masu_mat", texture=t_masu, roughness=0.78)
+    m_bean = b.add_material("bean_mat", color=(0.88, 0.76, 0.48, 1), roughness=0.6)
+    oni = tex.rgrad((512, 512), (226, 84, 62), (162, 32, 28))
+    dd = ImageDraw.Draw(oni)
+    dd.polygon([(126, 128), (168, 30), (196, 132)], fill=(246, 230, 190))
+    dd.polygon([(386, 128), (344, 30), (316, 132)], fill=(246, 230, 190))
+    dd.ellipse([150, 196, 224, 254], fill=(255, 250, 236))
+    dd.ellipse([288, 196, 362, 254], fill=(255, 250, 236))
+    dd.ellipse([174, 212, 204, 242], fill=(40, 30, 28))
+    dd.ellipse([312, 212, 342, 242], fill=(40, 30, 28))
+    dd.arc([176, 292, 336, 412], 200, 340, fill=(64, 18, 16), width=16)
+    oni = tex.vignette(tex.grain(oni, 5, 112), 0.3)
+    t_oni = b.add_texture(tex.to_png(oni), "oni_face")
+    m_oni = b.add_material("oni_mat", texture=t_oni, roughness=0.65)
+
+    oni_n = b.add_node("oni", mesh=b.add_mesh([G.prim(G.disc(0.52, 26), m_oni)], "oni"), t=(0.0, 0.30, -0.02))
+    masu = b.add_node("masu", mesh=b.add_mesh([
+        G.prim(G.poly([(-0.52, -0.78), (0.52, -0.78), (0.60, -0.24), (-0.60, -0.24)]), m_masu)], "masu"),
+        t=(0, 0, 0.04))
+    bean_mesh = b.add_mesh([G.prim(G.disc(0.055, 10), m_bean)], "bean")
+    beans = []
+    bspots = [(-0.34, -0.16), (-0.12, -0.18), (0.10, -0.16), (0.32, -0.18), (0.0, -0.10), (-0.22, -0.08)]
+    for i, (x, y) in enumerate(bspots):
+        beans.append(b.add_node("bean%d" % i, mesh=bean_mesh, t=(x, y, 0.06)))
+
+    children = [oni_n, masu] + beans
+    tracks = []
+    bm, _ = add_badge(b, label, 0.82)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, 0.28, 0.1), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        for i, n in enumerate(beans):
+            x, y = bspots[i]
+            tracks.append({"node": n, "times": [0, 0.1 + i * 0.04, 0.62 + i * 0.03],
+                           "translation": [(x, y, 0.06), (x, y, 0.06), (x * 1.7, 0.42, 0.12)]})
+            tracks.append({"node": n, "times": [0.62 + i * 0.03, 0.78 + i * 0.03],
+                           "scale": [(1, 1, 1), (0, 0, 0)]})
+        # 鬼が後ずさりして消える
+        tracks.append({"node": oni_n, "times": [0, 0.55, 0.75, 1.0],
+                       "translation": [(0, 0.30, -0.02), (0, 0.30, -0.02), (0.18, 0.46, -0.4), (0.34, 0.62, -0.9)]})
+        tracks.append({"node": oni_n, "times": [0, 0.6, 1.0],
+                       "scale": [(1, 1, 1), (1, 1, 1), (0, 0, 0)]})
+        tracks.append({"node": badge, "times": [0, 0.95, 1.18, 1.38, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.2, 1.2, 1.2), (1, 1, 1), (1, 1, 1)]})
+    else:
+        tracks.append({"node": oni_n, "times": [0, 0.6, 1.2, 1.8, 2.4],
+                       "rotation": [G.quat_axis((0, 0, 1), deg(a)) for a in (-6, 6, -6, 6, -6)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# クレーンゲーム — アームが降りて景品をつかみ上げる
+# ============================================================
+def build_crane(cat, key, label):
+    b = G.Builder()
+    glass = tex.vgrad((512, 512), (206, 226, 240), (150, 182, 206))
+    dd = ImageDraw.Draw(glass)
+    dd.rectangle([0, 0, 511, 511], outline=(232, 60, 92), width=26)
+    dd.line([(64, 40), (150, 470)], fill=(240, 248, 255), width=18)
+    glass = tex.vignette(tex.grain(glass, 4, 121), 0.3)
+    t_glass = b.add_texture(tex.to_png(glass), "crane_glass")
+    m_glass = b.add_material("crane_glass_mat", texture=t_glass, roughness=0.4)
+    m_frame = b.add_material("crane_frame_mat", color=(0.90, 0.24, 0.36, 1), roughness=0.5)
+    m_arm = b.add_material("crane_arm_mat", color=(0.72, 0.75, 0.80, 1), roughness=0.35, metallic=0.4)
+
+    W, H = 1.25, 1.55
+    cab = b.add_node("cabinet", mesh=b.add_mesh([G.prim(G.plane(W, H), m_glass)], "cabinet"), t=(0, 0, -0.06))
+    top = b.add_node("top", mesh=b.add_mesh([G.prim(G.plane(W * 1.06, 0.22), m_frame)], "top"), t=(0, H / 2, 0))
+    rail = b.add_node("rail", mesh=b.add_mesh([G.prim(G.plane(W * 0.94, 0.05), m_arm)], "rail"), t=(0, H * 0.34, 0))
+
+    # アーム(3本の爪)。降りて閉じて上がる
+    claw_geo = G.plane(0.05, 0.34)
+    claw_mesh = b.add_mesh([G.prim(claw_geo, m_arm)], "claw")
+    head = b.add_node("head", t=(0, H * 0.30, 0.03))
+    wire = b.add_node("wire", mesh=b.add_mesh([G.prim(G.plane(0.03, 0.5), m_arm)], "wire"), t=(0, 0.25, -0.01))
+    claws = []
+    for i, x in enumerate((-0.13, 0.0, 0.13)):
+        pv = b.add_node("clawp%d" % i, t=(x, 0, 0))
+        cn = b.add_node("claw%d" % i, mesh=claw_mesh, t=(0, -0.17, 0))
+        b.nodes[pv]["children"] = [cn]
+        claws.append(pv)
+    b.nodes[head]["children"] = [wire] + claws
+
+    children = [cab, top, rail, head]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.62)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, -H * 0.30, 0.05), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": head, "times": [0, 0.15, 0.6, 0.85, 1.35],
+                       "translation": [(0, H * 0.30, 0.03), (0, H * 0.30, 0.03), (0, -H * 0.20, 0.03),
+                                       (0, -H * 0.20, 0.03), (0, H * 0.16, 0.03)]})
+        for i, pv in enumerate(claws):
+            ang = (18, 0, -18)[i]
+            tracks.append({"node": pv, "times": [0, 0.6, 0.85],
+                           "rotation": [G.quat_axis((0, 0, 1), deg(ang)), G.quat_axis((0, 0, 1), deg(ang)),
+                                        G.quat_axis((0, 0, 1), 0)]})
+        tracks.append({"node": badge, "times": [0, 0.72, 0.9, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1, 1, 1), (1, 1, 1)]})
+        tracks.append({"node": badge, "times": [0, 0.85, 1.35, 2.0],
+                       "translation": [(0, -H * 0.30, 0.05), (0, -H * 0.30, 0.05),
+                                       (0, H * 0.06, 0.08), (0, H * 0.06, 0.08)]})
+    else:
+        tracks.append({"node": head, "times": [0, 0.9, 1.8, 2.7],
+                       "translation": [(-0.3, H * 0.30, 0.03), (0.3, H * 0.30, 0.03),
+                                       (-0.3, H * 0.30, 0.03), (0.3, H * 0.30, 0.03)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# もぐらたたき — もぐらが出てハンマーで叩くと結果
+# ============================================================
+def build_mogura(cat, key, label):
+    b = G.Builder()
+    t_board = b.add_texture(tex.to_png(tex.panel((512, 512), (86, 168, 92), (44, 116, 58))), "mogura_board")
+    m_board = b.add_material("mogura_board_mat", texture=t_board, roughness=0.7)
+    m_hole = b.add_material("mogura_hole_mat", color=(0.09, 0.08, 0.07, 1), roughness=0.95)
+    face = tex.rgrad((512, 512), (176, 136, 98), (118, 84, 56))
+    dd = ImageDraw.Draw(face)
+    dd.ellipse([146, 200, 216, 258], fill=(255, 252, 244))
+    dd.ellipse([296, 200, 366, 258], fill=(255, 252, 244))
+    dd.ellipse([168, 216, 196, 244], fill=(38, 30, 26))
+    dd.ellipse([318, 216, 346, 244], fill=(38, 30, 26))
+    dd.ellipse([222, 286, 290, 336], fill=(238, 148, 156))
+    face = tex.vignette(tex.grain(face, 5, 131), 0.28)
+    t_face = b.add_texture(tex.to_png(face), "mogura_face")
+    m_face = b.add_material("mogura_face_mat", texture=t_face, roughness=0.7)
+    m_hammer = b.add_material("mogura_hammer_mat", color=(0.92, 0.32, 0.30, 1), roughness=0.5)
+    m_handle = b.add_material("mogura_handle_mat", color=(0.55, 0.38, 0.22, 1), roughness=0.8)
+
+    board = b.add_node("board", mesh=b.add_mesh([G.prim(G.plane(1.6, 1.05), m_board)], "board"), t=(0, -0.15, -0.06))
+    holes = []
+    for i, x in enumerate((-0.48, 0.0, 0.48)):
+        holes.append(b.add_node("hole%d" % i,
+                                mesh=b.add_mesh([G.prim(G.disc(0.24, 22), m_hole)], "hole"),
+                                t=(x, -0.16, -0.04)))
+    mogu = b.add_node("mogura", mesh=b.add_mesh([G.prim(G.disc(0.2, 22), m_face)], "mogura"),
+                      t=(0, -0.32, -0.02), s=(1, 1, 1))
+    hammer_mesh = b.add_mesh([
+        G.prim(G.plane(0.42, 0.26), m_hammer),
+        G.prim(G.offset(G.plane(0.10, 0.5), dy=-0.35, dz=-0.01), m_handle),
+    ], "hammer")
+    ham_pivot = b.add_node("hammer_pivot", t=(0.62, 0.52, 0.1))
+    ham = b.add_node("hammer", mesh=hammer_mesh, t=(-0.2, -0.1, 0))
+    b.nodes[ham_pivot]["children"] = [ham]
+
+    children = [board] + holes + [mogu, ham_pivot]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.8)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, 0.05, 0.14), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": mogu, "times": [0, 0.1, 0.45, 0.72, 0.85],
+                       "translation": [(0, -0.32, -0.02), (0, -0.32, -0.02), (0, 0.02, -0.02),
+                                       (0, 0.02, -0.02), (0, -0.34, -0.02)]})
+        tracks.append({"node": ham_pivot, "times": [0, 0.3, 0.66, 0.8, 1.1],
+                       "rotation": [G.quat_axis((0, 0, 1), deg(a)) for a in (28, 44, -46, -40, 18)]})
+        tracks.append({"node": badge, "times": [0, 0.72, 0.95, 1.15, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.2, 1.2, 1.2), (1, 1, 1), (1, 1, 1)]})
+    else:
+        tracks.append({"node": mogu, "times": [0, 0.7, 1.4, 2.1, 2.8],
+                       "translation": [(0, -0.32, -0.02), (0, -0.04, -0.02), (0, -0.32, -0.02),
+                                       (0, -0.04, -0.02), (0, -0.32, -0.02)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# ボウリング — ボールが転がりピンが倒れて結果
+# ============================================================
+def build_bowling(cat, key, label):
+    b = G.Builder()
+    t_lane = b.add_texture(tex.to_png(tex.wood((512, 512), (198, 154, 96), seed=141, vertical=True)), "lane")
+    m_lane = b.add_material("lane_mat", texture=t_lane, roughness=0.4)
+    pin = tex.vgrad((256, 512), (255, 255, 255), (226, 228, 232))
+    dd = ImageDraw.Draw(pin)
+    dd.rectangle([0, 150, 256, 186], fill=(214, 42, 46))
+    dd.rectangle([0, 206, 256, 236], fill=(214, 42, 46))
+    t_pin = b.add_texture(tex.to_png(tex.vignette(pin, 0.25)), "pin")
+    m_pin = b.add_material("pin_mat", texture=t_pin, roughness=0.35)
+    m_ball = b.add_material("ball_mat", color=(0.16, 0.12, 0.32, 1), roughness=0.22, metallic=0.1)
+
+    lane = b.add_node("lane", mesh=b.add_mesh([G.prim(G.plane(1.5, 1.6), m_lane)], "lane"), t=(0, 0, -0.08))
+    pin_mesh = b.add_mesh([G.prim(G.poly([(-0.12, -0.36), (0.12, -0.36), (0.09, 0.36), (-0.09, 0.36)]), m_pin)], "pin")
+    pins = []
+    pspots = [(-0.50, 0.30), (-0.17, 0.38), (0.17, 0.38), (0.50, 0.30), (0.0, 0.02)]
+    for i, (x, y) in enumerate(pspots):
+        pv = b.add_node("pinp%d" % i, t=(x, y - 0.36, 0.0))
+        pn = b.add_node("pin%d" % i, mesh=pin_mesh, t=(0, 0.36, 0))
+        b.nodes[pv]["children"] = [pn]
+        pins.append(pv)
+    ball = b.add_node("ball", mesh=b.add_mesh([G.prim(G.disc(0.20, 24), m_ball)], "ball"), t=(0, -0.95, 0.04))
+
+    children = [lane] + pins + [ball]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.78)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, 0.34, 0.16), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": ball, "times": [0, 0.1, 0.6, 0.78],
+                       "translation": [(0, -0.95, 0.04), (0, -0.95, 0.04), (0, 0.06, 0.04), (0, 0.30, 0.04)]})
+        tracks.append({"node": ball, "times": [0, 0.6, 0.78],
+                       "scale": [(1, 1, 1), (0.78, 0.78, 1), (0.6, 0.6, 1)]})
+        for i, pv in enumerate(pins):
+            a = (-58, -40, 44, 60, -26)[i]
+            t0 = 0.58 + i * 0.03
+            tracks.append({"node": pv, "times": [0, t0, t0 + 0.22],
+                           "rotation": [G.quat_axis((0, 0, 1), 0), G.quat_axis((0, 0, 1), 0),
+                                        G.quat_axis((0, 0, 1), deg(a))]})
+        tracks.append({"node": badge, "times": [0, 0.9, 1.12, 1.32, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.2, 1.2, 1.2), (1, 1, 1), (1, 1, 1)]})
+    else:
+        tracks.append({"node": ball, "times": [0, 0.9, 1.8, 2.7],
+                       "translation": [(0, -0.95, 0.04), (0, -0.80, 0.04), (0, -0.95, 0.04), (0, -0.80, 0.04)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# 巻物 — 巻物が下へ開いて結果が現れる
+# ============================================================
+def build_makimono(cat, key, label):
+    b = G.Builder()
+    washi = tex.paper((512, 512), (247, 238, 214), seed=151)
+    dd = ImageDraw.Draw(washi)
+    dd.rectangle([26, 0, 34, 511], fill=(206, 168, 84))
+    dd.rectangle([478, 0, 486, 511], fill=(206, 168, 84))
+    t_washi = b.add_texture(tex.to_png(washi), "makimono_washi")
+    m_washi = b.add_material("makimono_washi_mat", texture=t_washi, roughness=0.85)
+    t_rod = b.add_texture(tex.to_png(tex.wood((512, 512), (112, 72, 42), seed=152, vertical=True)), "makimono_rod")
+    m_rod = b.add_material("makimono_rod_mat", texture=t_rod, roughness=0.6)
+    m_cap = b.add_material("makimono_cap_mat", color=(0.80, 0.64, 0.28, 1), roughness=0.35, metallic=0.25)
+
+    W, PH = 1.15, 1.35
+    grow = b.add_node("paper_grow", t=(0, 0.60, -0.02))
+    paper = b.add_node("paper", mesh=b.add_mesh([G.prim(G.plane(W, PH), m_washi)], "paper"), t=(0, -PH / 2, 0))
+    b.nodes[grow]["children"] = [paper]
+    rod_top = b.add_node("rod_top", mesh=b.add_mesh([
+        G.prim(G.plane(W * 1.16, 0.15), m_rod),
+        G.prim(G.offset(G.disc(0.10, 16), dx=-W * 0.58), m_cap),
+        G.prim(G.offset(G.disc(0.10, 16), dx=W * 0.58), m_cap),
+    ], "rod"), t=(0, 0.66, 0.03))
+    rod_bottom = b.add_node("rod_bottom", mesh=b.add_mesh([
+        G.prim(G.plane(W * 1.16, 0.15), m_rod),
+        G.prim(G.offset(G.disc(0.10, 16), dx=-W * 0.58), m_cap),
+        G.prim(G.offset(G.disc(0.10, 16), dx=W * 0.58), m_cap),
+    ], "rod2"), t=(0, 0.58, 0.03))
+
+    children = [grow, rod_top, rod_bottom]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.8)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, -0.06, 0.06), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": grow, "times": [0, 0.15, 1.0],
+                       "scale": [(1, 0.09, 1), (1, 0.09, 1), (1, 1, 1)]})
+        tracks.append({"node": rod_bottom, "times": [0, 0.15, 1.0],
+                       "translation": [(0, 0.48, 0.03), (0, 0.48, 0.03), (0, 0.60 - PH, 0.03)]})
+        tracks.append({"node": badge, "times": [0, 0.95, 1.18, 1.38, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.2, 1.2, 1.2), (1, 1, 1), (1, 1, 1)]})
+    else:
+        tracks.append({"node": grow, "times": [0, 0.9, 1.8, 2.7],
+                       "scale": [(1, 0.09, 1), (1, 0.26, 1), (1, 0.09, 1), (1, 0.26, 1)]})
+        tracks.append({"node": rod_bottom, "times": [0, 0.9, 1.8, 2.7],
+                       "translation": [(0, 0.48, 0.03), (0, 0.48 - PH * 0.2, 0.03),
+                                       (0, 0.48, 0.03), (0, 0.48 - PH * 0.2, 0.03)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
+# ============================================================
+# お年玉 — ぽち袋からお札が出てくる
+# ============================================================
+def build_otoshidama(cat, key, label):
+    b = G.Builder()
+    env = tex.vgrad((512, 512), (250, 246, 238), (232, 224, 210))
+    dd = ImageDraw.Draw(env)
+    dd.rectangle([0, 0, 511, 96], fill=(206, 40, 46))
+    dd.rectangle([0, 96, 511, 112], fill=(226, 196, 120))
+    env = tex.vignette(tex.grain(env, 5, 161), 0.26)
+    tex.draw_text(env, "お年玉", (74, 190, 438, 336), fill=(190, 30, 36),
+                  stroke=(255, 255, 255), stroke_w=6, path=tex.FONT_SERIF)
+    t_env = b.add_texture(tex.to_png(env), "pochi")
+    m_env = b.add_material("pochi_mat", texture=t_env, roughness=0.8)
+    bill = tex.vgrad((512, 256), (238, 240, 226), (214, 220, 202))
+    dd = ImageDraw.Draw(bill)
+    dd.rectangle([16, 16, 496, 240], outline=(140, 156, 130), width=6)
+    dd.ellipse([196, 66, 316, 190], outline=(150, 164, 140), width=5)
+    t_bill = b.add_texture(tex.to_png(tex.grain(bill, 4, 162)), "bill")
+    m_bill = b.add_material("bill_mat", texture=t_bill, roughness=0.8)
+
+    W, H = 0.95, 1.3
+    bill_n = b.add_node("bill", mesh=b.add_mesh([G.prim(G.plane(W * 0.82, 0.62), m_bill)], "bill"),
+                        t=(0, 0.1, -0.03))
+    env_n = b.add_node("envelope", mesh=b.add_mesh([G.prim(G.plane(W, H), m_env)], "envelope"))
+    flap_mesh = b.add_mesh([G.prim(G.plane(W, 0.3), m_env)], "flap")
+    flap_h = b.add_node("flap_hinge", t=(0, H / 2, 0.02))
+    flap = b.add_node("flap", mesh=flap_mesh, t=(0, -0.15, 0))
+    b.nodes[flap_h]["children"] = [flap]
+
+    children = [bill_n, env_n, flap_h]
+    tracks = []
+    bm, _ = add_badge(b, label, 0.72)
+    if bm is not None:
+        badge = b.add_node("badge", mesh=bm, t=(0, 0.72, 0.08), s=(0, 0, 0))
+        children.append(badge)
+    root = b.add_node("root", children=children)
+
+    if label:
+        tracks.append({"node": flap_h, "times": [0, 0.2, 0.7],
+                       "rotation": [G.quat_axis((1, 0, 0), deg(a)) for a in (0, 0, 128)]})
+        tracks.append({"node": bill_n, "times": [0, 0.45, 1.0],
+                       "translation": [(0, 0.1, -0.03), (0, 0.1, -0.03), (0, 0.82, -0.03)]})
+        tracks.append({"node": badge, "times": [0, 0.95, 1.18, 1.38, 2.0],
+                       "scale": [(0, 0, 0), (0, 0, 0), (1.2, 1.2, 1.2), (1, 1, 1), (1, 1, 1)]})
+    else:
+        tracks.append({"node": root, "times": [0, 0.6, 1.2, 1.8, 2.4],
+                       "rotation": [G.quat_axis((0, 0, 1), deg(a)) for a in (-5, 5, -5, 5, -5)]})
+    b.animate(tracks, "reveal")
+    return b, [root]
+
+
 # ============================================================
 BUILDERS = {
     "sankaku": build_sankaku,            # 王道: 三角くじ
@@ -531,6 +996,14 @@ BUILDERS = {
     "receipt": build_receipt,            # 業種: レシート
     "ring": build_ring,                  # 参加型: 輪投げ
     "safe": build_safe,                  # 参加型: 金庫
+    "fukubukuro": build_fukubukuro,      # 季節: 福袋
+    "sakura": build_sakura,              # 季節: 桜
+    "mamemaki": build_mamemaki,          # 季節: 豆まき
+    "otoshidama": build_otoshidama,      # 季節: お年玉
+    "crane": build_crane,                # 業種: クレーンゲーム
+    "mogura": build_mogura,              # 参加型: もぐらたたき
+    "bowling": build_bowling,            # 参加型: ボウリング
+    "makimono": build_makimono,          # 王道: 巻物
 }
 
 
