@@ -388,9 +388,13 @@ export default function ARViewer({
       }
       // オブジェクト側の状態(スマホで「カメラは映るがオブジェクトが出ない」の切り分け用)
       lines.push(`マーカー検出=${foundCountRef.current}回 結果表示=${revealed}`);
-      const modelEl = document.querySelector("[gltf-model]") as any;
+      // 表示オブジェクトは .glb だけでなく透過MP4/画像のこともあるため、
+      // いずれの属性でも拾えるようにする。
+      const modelEl = document.querySelector(
+        "[gltf-model], [alpha-video], [gif-image]"
+      ) as any;
       if (!modelEl) {
-        lines.push("model: エンティティ無し");
+        lines.push("表示オブジェクト: エンティティ無し");
       } else {
         const obj = modelEl.object3D;
         const loaded = !!obj && obj.children.length > 0;
@@ -403,7 +407,14 @@ export default function ARViewer({
           }
           return String(v);
         };
-        lines.push(`model: 読込=${loaded ? "済" : "まだ"} visible=${modelEl.getAttribute("visible")}`);
+        const kindLabel = modelEl.hasAttribute("gltf-model")
+          ? "3Dモデル"
+          : modelEl.hasAttribute("alpha-video")
+            ? "動画"
+            : "画像";
+        lines.push(
+          `表示オブジェクト(${kindLabel}): 読込=${loaded ? "済" : "まだ"} visible=${modelEl.getAttribute("visible")}`
+        );
         lines.push(`  scale=${vec("scale")} rot=${vec("rotation")} pos=${vec("position")}`);
         // 実際に画面のどこへ描かれているかを、カメラから見た座標で確認する
         try {

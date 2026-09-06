@@ -38,6 +38,14 @@ export const DEFAULT_MODEL_SCALE = "1 1 1";
 // であることを確認済み。個別に合わない場合は管理画面の向き欄で上書きできる。
 export const DEFAULT_MODEL_ROTATION = "-90 0 0";
 
+// 動画(透過MP4)/画像を表示する際の既定サイズ。
+// これらは3Dモデルではなく1辺1ユニットの平面に貼って表示するため、
+// .glb用の既定値(等倍)ではマーカーに対して小さすぎる。
+// 動作実績のある旧実装(index.html)の
+//   <a-video position="0 0 0" rotation="-90 0 0" scale="3 3 3">
+// と同じ 3倍 を既定にする。
+export const DEFAULT_VIDEO_SCALE = "3 3 3";
+
 export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
 export const MINDAR_IMAGE_AFRAME_SRC =
@@ -256,8 +264,15 @@ export function ObjectEntity({
 }) {
   const kind = assetKind(url);
   const rotation = rotationOverride || `0 ${rotationY} 0`;
-  // モデルに実際に適用する向き
+  // 実際に適用する向き。3Dモデルだけでなく、動画/画像の平面にも同じ既定を使う。
+  // AR.jsのマーカー座標系は「マーカー面=XZ平面 / 法線=+Y」なので、無回転のままだと
+  // 平面がマーカーに対して垂直に立ってしまい、真上から見ると線にしか見えない
+  // (スマホでまったく見えず、PCでは斜めから薄く見えるという症状の原因)。
+  // 旧実装(index.html)の <a-video rotation="-90 0 0"> と同じ向きに寝かせる。
   const modelRotation = rotationOverride || (rotationY ? rotation : DEFAULT_MODEL_ROTATION);
+  // 位置の既定。呼び出し側の既定値 "0 0.6 0" は「未指定」とみなしてマーカー中心に置く
+  // (旧実装も position="0 0 0")。
+  const effectivePosition = position === "0 0.6 0" ? "0 0 0" : position;
   // 「焦らし」演出の自動回転は、基準の向きを保ったままY軸だけ1周させる。
   // 以前は無条件に "to: 0 360 0" としていたため、基準の向き(既定は -90 0 0)ごと
   // 上書きされ、演出中はマーカー面に寝た状態へ倒れていってしまい、
@@ -272,9 +287,9 @@ export function ObjectEntity({
     return (
       <a-entity
         alpha-video={`src: ${url}`}
-        position={position}
-        rotation={rotation}
-        scale={scale || undefined}
+        position={effectivePosition}
+        rotation={modelRotation}
+        scale={scale || DEFAULT_VIDEO_SCALE}
         visible={visibleAttr}
       ></a-entity>
     );
@@ -283,9 +298,9 @@ export function ObjectEntity({
     return (
       <a-entity
         gif-image={`src: ${url}`}
-        position={position}
-        rotation={rotation}
-        scale={scale || undefined}
+        position={effectivePosition}
+        rotation={modelRotation}
+        scale={scale || DEFAULT_VIDEO_SCALE}
         visible={visibleAttr}
       ></a-entity>
     );
@@ -293,7 +308,7 @@ export function ObjectEntity({
   return (
     <a-entity
       gltf-model={`url(${url})`}
-      position={position === "0 0.6 0" ? "0 0 0" : position}
+      position={effectivePosition}
       scale={scale || DEFAULT_MODEL_SCALE}
       rotation={modelRotation}
       // .glbに埋め込まれたキーフレームアニメーション(回転・拡縮・上下移動など)を自動再生する。
