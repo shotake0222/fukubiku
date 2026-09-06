@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { PRESET_CATEGORIES } from "@/lib/types";
 import type { DrawGroup, DrawGroupEntry, Order, PresetObject } from "@/lib/types";
 import {
   DRAW_COOLDOWN_HOURS,
@@ -132,6 +133,24 @@ function pickWeighted(entries: DrawGroupEntry[]): DrawGroupEntry | null {
   return entries[entries.length - 1];
 }
 
+// 全29カテゴリに <カテゴリ>_suspense_3d.glb と <カテゴリ>_cookie_3d.glb が存在する
+// (public/presets/ 配下。存在は実ファイルで確認済み)。
+const CATEGORY_SLUGS = new Set(PRESET_CATEGORIES.map((c) => c.value));
+
+// 結果発表までの「焦らし」演出に使うモデル。結果バッジの無い、そのカテゴリの
+// 実物がアニメーションしているだけの.glb。
+function suspenseUrlFor(category: string | null): string | null {
+  if (!category || !CATEGORY_SLUGS.has(category)) return null;
+  return "/presets/" + category + "/" + category + "_suspense_3d.glb";
+}
+
+// クールダウン中(=すでに抽選済み)に表示する「またね」モデル。
+// 旧実装(index.html)でCookie保持時に <カテゴリ>_cookie.mp4 を出していたのと同じ役割。
+function cookieUrlFor(category: string | null): string | null {
+  if (!category || !CATEGORY_SLUGS.has(category)) return null;
+  return "/presets/" + category + "/" + category + "_cookie_3d.glb";
+}
+
 function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
@@ -176,6 +195,10 @@ function simplePage(bodyHtml: string, status = 200): Response {
 }
 
 // 動作実績のある旧実装(index.html)と同じ構造のARページを組み立てる。
+// 結果が出るまでの最低演出時間。旧実装は3〜5秒のランダムだったが、
+// 「結果が出るのが早すぎる」ため5秒に固定する。
+const REVEAL_DELAY_MS = 5000;
+
 function buildArHtml(opts: {
   modelUrl: string;
   markerUrl: string;
@@ -184,11 +207,16 @@ function buildArHtml(opts: {
   position: string;
   mindFileUrl: string | null;
   useMindAr: boolean;
+  /** 結果発表前に表示する焦らし用モデル。nullなら焦らし無しで即表示する。 */
+  suspenseUrl: string | null;
+  /** クールダウン中などに画面下部へ出す案内文(プレーンテキスト)。 */
+  notice: string | null;
 }): string {
   const kind = assetKind(opts.modelUrl);
+  // 焦らし演出は「結果も3Dモデル」のときだけ入れる。
+  // 平面(動画/画像)の結果に3Dの焦らしを挟むと見た目の連続性が崩れるため。
+  const suspenseUrl = kind === "model" ? opts.suspenseUrl : null;
 
-  // 表示オブジェクトのマークアップ。旧実装と同じく最初は visible="false" で置き、
-  // マーカーを検出したタイミングで表示する。
   let objectMarkup: string;
   if (kind === "video") {
     objectMarkup =
@@ -210,9 +238,24 @@ function buildArHtml(opts: {
       ' animation-mixer="loop: once; clampWhenFinished: true; timeScale: 0"></a-entity>';
   }
 
+  // 焦らし用モデル。結果と同じ位置/向き/大きさに置き、結果表示時に
+  // 違和感なく差し替わるようにする。ループ再生で5秒間動かし続ける。
+  const suspenseMarkup = suspenseUrl
+    ? '<a-entity id="ar-suspense" gltf-model="url(' + esc(suspenseUrl) + ')"' +
+      ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
+      ' scale="' + esc(opts.scale) + '"' +
+      ' animation-mixer="loop: repeat; timeScale: 0"></a-entity>'
+    : "";
+
+  // 焦らしがある場合、結果オブジェクトは最初は非表示にしておく。
+  const objectMarkupGated = suspenseUrl
+    ? objectMarkup.replace('<a-entity id="ar-object"', '<a-entity id="ar-object" visible="false"')
+    : objectMarkup;
+
   // 表示オブジェクトはマーカー(ターゲット)の子ではなく、独立したステージに置く。
   // マーカー側は姿勢の供給だけを担当する(marker-pose)。
-  const stageMarkup = '<a-entity id="ar-stage" visible="false">' + objectMarkup + "</a-entity>";
+  const stageMarkup =
+    '<a-entity id="ar-stage" visible="false">' + suspenseMarkup + objectMarkupGated + "</a-entity>";
   const poseAttr = ' marker-pose="stage: #ar-stage; hold: 1200; lerp: 0.35"';
 
   const sceneMarkup = opts.useMindAr
@@ -269,6 +312,10 @@ function buildArHtml(opts: {
     ".ui a.disabled { pointer-events: none; color: #ccc; }",
     "#snap { position: absolute; top: 0; left: 0; width: 100%; height: 100%;",
     "  object-fit: contain; z-index: 500; display: none; background: rgba(0,0,0,0.85); }",
+    ".notice { position: absolute; left: 12px; right: 12px; bottom: 110px; z-index: 100;",
+    "  padding: 12px 16px; border-radius: 12px; background: rgba(15,23,42,0.82); color: #fff;",
+    "  font: bold 14px/1.7 system-ui,-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;",
+    "  text-align: center; pointer-events: none; }",
     ".datetime-container { position: absolute; top: 20px; left: 0; width: 100%; z-index: 100;",
     "  text-align: center; color: #2196F3; font-size: 18px; font-weight: bold; pointer-events: none;",
     "  box-sizing: border-box; padding: 0 10px; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }",
@@ -282,6 +329,7 @@ function buildArHtml(opts: {
     "</head>",
     "<body>",
     '<div class="datetime-container"><span id="display-date"></span></div>',
+    opts.notice ? '<div class="notice">' + esc(opts.notice) + "</div>" : "",
     '<img id="snap" alt="">',
     sceneMarkup,
     '<div class="ui">',
@@ -299,15 +347,25 @@ function buildArHtml(opts: {
     "      d.getHours()+'時'+String(d.getMinutes()).padStart(2,'0')+'分 '+week[d.getDay()]+'曜日';",
     "  }",
     "  stamp(); setInterval(stamp, 30000);",
-    "  // 表示・非表示はmarker-poseコンポーネントが管理する。",
-    "  // ここでは初回表示のタイミングで一度きりのアニメーションを開始する。",
+    "  // 表示・非表示(マーカー追従)はmarker-poseコンポーネントが管理する。",
+    "  // ここでは初回表示をきっかけに『焦らし→結果発表』の進行を行う。",
     "  var stage = document.getElementById('ar-stage');",
     "  var obj = document.getElementById('ar-object');",
-    "  if (stage && obj) {",
+    "  var sus = document.getElementById('ar-suspense');",
+    "  var startAnim = function(el){",
+    "    if (el && el.getAttribute('animation-mixer')) {",
+    "      el.setAttribute('animation-mixer', 'timeScale', 1);",
+    "    }",
+    "  };",
+    "  if (stage) {",
     "    stage.addEventListener('ar-shown', function(){",
-    "      if (obj.getAttribute('animation-mixer')) {",
-    "        obj.setAttribute('animation-mixer', 'timeScale', 1);",
-    "      }",
+    "      if (!sus) { startAnim(obj); return; }",
+    "      // 焦らし用モデルをループ再生し、" + String(REVEAL_DELAY_MS / 1000) + "秒後に結果へ差し替える。",
+    "      startAnim(sus);",
+    "      setTimeout(function(){",
+    "        sus.setAttribute('visible', 'false');",
+    "        if (obj) { obj.setAttribute('visible', 'true'); startAnim(obj); }",
+    "      }, " + String(REVEAL_DELAY_MS) + ");",
     "    }, { once: true });",
     "  }",
     "  var snapImg = document.getElementById('snap');",
@@ -375,6 +433,11 @@ export async function GET(
     scale: string | null;
     rotation: string | null;
     position: string | null;
+    /** テンプレート(カテゴリ)。焦らし演出のモデルを決めるのに使う。 */
+    category?: string | null;
+    /** 焦らし演出を入れない(クールダウン中の「またね」表示など)。 */
+    noSuspense?: boolean;
+    notice?: string | null;
     setCookie?: string;
   }): Response => {
     if (!o.modelUrl) {
@@ -387,6 +450,8 @@ export async function GET(
       markerUrl,
       mindFileUrl: o.mindFileUrl,
       useMindAr,
+      suspenseUrl: o.noSuspense ? null : suspenseUrlFor(o.category ?? null),
+      notice: o.notice ?? null,
       // 旧実装(index.html)と同じ既定値。
       // AR.jsのマーカー座標系は「マーカー面=XZ平面 / 法線=+Y」であることを実測済みで、
       // 正面が+Zのモデル/平面はX軸まわりに-90度回すと視聴者側を向く。
@@ -416,6 +481,7 @@ export async function GET(
   if (order) {
     const o = order as Order;
     let modelUrl: string | null = o.custom_model_url;
+    let category: string | null = null;
     let scale: string | null = null;
     let rotation: string | null = null;
     let position: string | null = null;
@@ -427,6 +493,7 @@ export async function GET(
         .single();
       const p = preset as PresetObject | null;
       modelUrl = p?.model_url ?? null;
+      category = p?.category ?? null;
       scale = scaleValue(p?.scale);
       rotation = vec3(p?.rotation);
       position = vec3(p?.position);
@@ -435,6 +502,7 @@ export async function GET(
       modelUrl,
       mindFileUrl: o.mind_file_url,
       displayType: o.display_type,
+      category,
       scale,
       rotation,
       position,
@@ -455,7 +523,23 @@ export async function GET(
   const remainingMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs, cooldownHours) : 0;
 
   if (remainingMs > 0) {
-    return simplePage(esc(buildRetryMessage(decoded?.category ?? null, remainingMs)));
+    // 旧実装(index.html)がCookie保持時に <カテゴリ>_cookie.mp4 を出していたのと
+    // 同じ役割の「またね」モデルをARで表示し、案内文を重ねる。
+    // カテゴリが分からない(カスタムアップロード等)場合のみテキストのみの案内にする。
+    const message = buildRetryMessage(decoded?.category ?? null, remainingMs);
+    const cookieUrl = cookieUrlFor(decoded?.category ?? null);
+    if (!cookieUrl) return simplePage(esc(message));
+    return respondAr({
+      modelUrl: cookieUrl,
+      mindFileUrl: g.mind_file_url,
+      displayType: g.display_type,
+      category: decoded?.category ?? null,
+      noSuspense: true,
+      notice: message,
+      scale: null,
+      rotation: null,
+      position: null,
+    });
   }
 
   const { data: entries } = await supabase
@@ -496,6 +580,7 @@ export async function GET(
     modelUrl,
     mindFileUrl: g.mind_file_url,
     displayType: g.display_type,
+    category,
     scale,
     rotation,
     position,
