@@ -456,7 +456,10 @@ export async function GET(
       // AR.jsのマーカー座標系は「マーカー面=XZ平面 / 法線=+Y」であることを実測済みで、
       // 正面が+Zのモデル/平面はX軸まわりに-90度回すと視聴者側を向く。
       rotation: o.rotation || "-90 0 0",
-      scale: o.scale || (kind === "model" ? "1 1 1" : "3 3 3"),
+      // 既定の大きさ。実機で「小さい」という指摘が続いたため、
+      // 3Dモデル 1→2、平面(動画/画像) 3→6 と2倍に引き上げている。
+      // プリセットに個別の大きさが保存されている場合はそちらが優先される。
+      scale: o.scale || (kind === "model" ? "2 2 2" : "6 6 6"),
       position: o.position || "0 0 0",
     });
     const headers: Record<string, string> = {
@@ -475,11 +478,54 @@ export async function GET(
     supabase.from("draw_groups").select("*").eq("hash", params.hash).maybeSingle(),
   ]);
 
-  // 1) 注文(orders): 1件に固定の景品が割り当てられているフロー
-  const order = orderRes.data;
+  const order = orderRes.data as Order | null;
+  const group = groupRes.data as DrawGroup | null;
 
+  if (!order && !group) {
+    return simplePage("お探しのページは見つかりませんでした。", 404);
+  }
+
+  // --- クールダウン判定(注文フロー・抽選セットフロー共通) ---
+  // 旧実装(index.html)はCookieの有無だけを見ており、注文/抽選の区別は無かった。
+  // ここでも同じく、どちらのフローでも「一度見たら一定時間は再表示しない」を適用する。
+  // (以前は抽選セットのみに適用していたため、注文URLでは何も起きなかった)
+  const cookieName = drawCookieName(params.hash);
+  const decoded = decodeDrawCookieValue(cookies().get(cookieName)?.value);
+  const cooldownHours = group?.cooldown_hours ?? DRAW_COOLDOWN_HOURS;
+  const remainingMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs, cooldownHours) : 0;
+  const displayType = order ? order.display_type : group!.display_type;
+  const mindFileUrl = order ? order.mind_file_url : group!.mind_file_url;
+
+  if (remainingMs > 0) {
+    // 旧実装がCookie保持時に <カテゴリ>_cookie.mp4(=「またね」)を出していたのと同じ役割。
+    // 「時間をおいて再チャレンジ」の案内文を重ねて表示する。
+    const message = buildRetryMessage(decoded?.category ?? null, remainingMs);
+    const cookieUrl = cookieUrlFor(decoded?.category ?? null);
+    if (!cookieUrl) return simplePage(esc(message));
+    return respondAr({
+      modelUrl: cookieUrl,
+      mindFileUrl,
+      displayType,
+      category: decoded?.category ?? null,
+      noSuspense: true,
+      notice: message,
+      scale: null,
+      rotation: null,
+      position: null,
+    });
+  }
+
+  const buildSetCookie = (category: string | null): string =>
+    cookieName +
+    "=" +
+    encodeDrawCookieValue(category) +
+    "; Max-Age=" +
+    Math.round(cooldownHours * 3600) +
+    "; Path=/; SameSite=Lax";
+
+  // 1) 注文(orders): 1件に固定の景品が割り当てられているフロー
   if (order) {
-    const o = order as Order;
+    const o = order;
     let modelUrl: string | null = o.custom_model_url;
     let category: string | null = null;
     let scale: string | null = null;
@@ -506,41 +552,12 @@ export async function GET(
       scale,
       rotation,
       position,
+      setCookie: buildSetCookie(category),
     });
   }
 
   // 2) 抽選セット(draw_groups): アクセスの都度その場で抽選するフロー
-  const group = groupRes.data;
-
-  if (!group) {
-    return simplePage("お探しのページは見つかりませんでした。", 404);
-  }
-
-  const g = group as DrawGroup;
-  const cookieName = drawCookieName(params.hash);
-  const decoded = decodeDrawCookieValue(cookies().get(cookieName)?.value);
-  const cooldownHours = g.cooldown_hours ?? DRAW_COOLDOWN_HOURS;
-  const remainingMs = decoded ? getRemainingCooldownMs(decoded.drawnAtMs, cooldownHours) : 0;
-
-  if (remainingMs > 0) {
-    // 旧実装(index.html)がCookie保持時に <カテゴリ>_cookie.mp4 を出していたのと
-    // 同じ役割の「またね」モデルをARで表示し、案内文を重ねる。
-    // カテゴリが分からない(カスタムアップロード等)場合のみテキストのみの案内にする。
-    const message = buildRetryMessage(decoded?.category ?? null, remainingMs);
-    const cookieUrl = cookieUrlFor(decoded?.category ?? null);
-    if (!cookieUrl) return simplePage(esc(message));
-    return respondAr({
-      modelUrl: cookieUrl,
-      mindFileUrl: g.mind_file_url,
-      displayType: g.display_type,
-      category: decoded?.category ?? null,
-      noSuspense: true,
-      notice: message,
-      scale: null,
-      rotation: null,
-      position: null,
-    });
-  }
+  const g = group!;
 
   const { data: entries } = await supabase
     .from("draw_group_entries")
@@ -572,10 +589,6 @@ export async function GET(
     position = vec3(p?.position);
   }
 
-  const cookieValue = encodeDrawCookieValue(category);
-  const setCookie =
-    cookieName + "=" + cookieValue + "; Max-Age=" + Math.round(cooldownHours * 3600) + "; Path=/";
-
   return respondAr({
     modelUrl,
     mindFileUrl: g.mind_file_url,
@@ -584,6 +597,6 @@ export async function GET(
     scale,
     rotation,
     position,
-    setCookie,
+    setCookie: buildSetCookie(category),
   });
 }
