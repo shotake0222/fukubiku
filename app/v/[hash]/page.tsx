@@ -71,6 +71,8 @@ export default async function ViewerPage({
   const rawThresh = Array.isArray(searchParams?.thresh) ? searchParams?.thresh[0] : searchParams?.thresh;
   const threshOverride = rawThresh && /^[0-4]$/.test(rawThresh) ? Number(rawThresh) : 2;
   const debug = (Array.isArray(searchParams?.debug) ? searchParams?.debug[0] : searchParams?.debug) === "1";
+  const rotGrid =
+    (Array.isArray(searchParams?.rotgrid) ? searchParams?.rotgrid[0] : searchParams?.rotgrid) === "1";
 
   const { data: order } = await supabase
     .from("orders")
@@ -113,6 +115,7 @@ export default async function ViewerPage({
         position={posOverride ?? position}
         thresholdMode={threshOverride}
         debug={debug}
+        rotGrid={rotGrid}
       />
     );
   }
@@ -195,6 +198,7 @@ export default async function ViewerPage({
       position={posOverride ?? position}
       thresholdMode={threshOverride}
       debug={debug}
+      rotGrid={rotGrid}
       hash={params.hash}
       cooldownHours={cooldownHours}
     />

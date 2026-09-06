@@ -38,6 +38,7 @@ export default function ARViewer({
   position,
   thresholdMode = 2,
   debug = false,
+  rotGrid = false,
   category,
   hash,
   blocked = false,
@@ -62,6 +63,9 @@ export default function ARViewer({
   /** ARToolKitの二値化しきい値モード(0=手動/1=中央値/2=大津/3=適応的/4=ブラケット)。
    * 照明ムラやグレアに弱い場合の調整用。URLの ?thresh= で上書きできる。 */
   thresholdMode?: number;
+  /** ?debug=1&rotgrid=1 で、向きの候補を横一列に並べて表示する。
+   * どれが正面を向くかを実機の写真1枚で判断するための診断用。 */
+  rotGrid?: boolean;
   /** URLに ?debug=1 が付いている場合に、カメラ映像や要素の状態を画面上に表示する。
    * 実機(特にスマホ)で「真っ暗で何も映らない」原因を切り分けるための診断用。 */
   debug?: boolean;
@@ -443,12 +447,15 @@ export default function ARViewer({
       const top = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
       lines.push(`中央の最前面: ${top ? `${top.tagName}.${(top.className || "").toString().slice(0, 24)}` : "-"}`);
       lines.push(`window ${window.innerWidth}x${window.innerHeight} dpr=${window.devicePixelRatio}`);
+      if (rotGrid) {
+        lines.push("向き診断: 左から 0 0 0 / -90 0 0 / 90 0 0 / 0 180 0");
+      }
       setDiag(lines);
     };
     collect();
     const t = setInterval(collect, 1000);
     return () => clearInterval(t);
-  }, [debug, ready, loadError, revealed]);
+  }, [debug, ready, loadError, revealed, rotGrid]);
 
   if (blocked) {
     return (
@@ -563,15 +570,17 @@ export default function ARViewer({
         >
           <a-camera position="0 0 0" look-controls-enabled="false"></a-camera>
           <a-entity mindar-image-target="targetIndex: 0" ref={targetElRef}>
-            <ObjectEntity
-              url={modelUrl}
-              scale={scale}
-              rotation={rotation}
-              position={position || undefined}
-              visible={revealed}
-              loop={false}
-            />
-            {!revealed && isCategorySuspenseAvailable(category) && (
+            {!rotGrid && (
+              <ObjectEntity
+                url={modelUrl}
+                scale={scale}
+                rotation={rotation}
+                position={position || undefined}
+                visible={revealed}
+                loop={false}
+              />
+            )}
+            {!rotGrid && !revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} scale={scale} />
             )}
             {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity scale={scale} />}
@@ -626,6 +635,20 @@ export default function ARViewer({
                 オブジェクトが画面に貼り付いたまま固定され、直前の姿勢がカメラに
                 近かった場合は画面全体を覆ってしまう(ブラックアウトの原因)。 */}
           <a-marker preset="custom" type="pattern" url={marker} ref={targetElRef}>
+            {/* 向き診断: 候補を左から順に並べる。正面を向いている位置で正解が分かる。
+                左から 0 0 0 / -90 0 0 / 90 0 0 / 0 180 0 */}
+            {rotGrid &&
+              ["0 0 0", "-90 0 0", "90 0 0", "0 180 0"].map((r, i) => (
+                <ObjectEntity
+                  key={r}
+                  url={modelUrl}
+                  scale="1 1 1"
+                  rotation={r}
+                  position={`${(i - 1.5) * 1.4} 0 0`}
+                  visible
+                  loop={false}
+                />
+              ))}
             <ObjectEntity
               url={modelUrl}
               scale={scale}
@@ -636,7 +659,9 @@ export default function ARViewer({
             {!revealed && isCategorySuspenseAvailable(category) && (
               <CategorySuspenseEntity category={category} scale={scale} />
             )}
-            {!revealed && !isCategorySuspenseAvailable(category) && <SuspenseEntity scale={scale} />}
+            {!rotGrid && !revealed && !isCategorySuspenseAvailable(category) && (
+              <SuspenseEntity scale={scale} />
+            )}
           </a-marker>
           <a-entity camera></a-entity>
         </a-scene>
