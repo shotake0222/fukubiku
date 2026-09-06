@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { LIMIT_PERIOD_OPTIONS } from "@/lib/drawLimit";
 
 export interface OrderDetailsValue {
   client_name: string;
@@ -9,6 +10,8 @@ export interface OrderDetailsValue {
   due_date: string;
   person_in_charge: string;
   quantity: string;
+  /** quantity を「どの期間あたりの上限」とみなすか。"none" なら制限しない。 */
+  limit_period: string;
   renewal_check_date: string;
   /** 再表示までの間隔(時間)。空欄なら既定値(1時間)、"0" なら制限なし。 */
   cooldown_hours: string;
@@ -24,6 +27,7 @@ export function emptyOrderDetails(): OrderDetailsValue {
     due_date: "",
     person_in_charge: "",
     quantity: "",
+    limit_period: "none",
     renewal_check_date: "",
     cooldown_hours: "",
     notes: "",
@@ -88,14 +92,32 @@ export default function OrderDetailsForm({
           className="input"
         />
       </Field>
-      <Field label="個数">
-        <input
-          type="number"
-          min={0}
-          value={value.quantity}
-          onChange={(e) => set({ quantity: e.target.value })}
-          className="input"
-        />
+      <Field label="個数（表示回数の上限）">
+        <div className="flex gap-2">
+          <input
+            type="number"
+            min={0}
+            value={value.quantity}
+            onChange={(e) => set({ quantity: e.target.value })}
+            className="input"
+          />
+          <select
+            value={value.limit_period}
+            onChange={(e) => set({ limit_period: e.target.value })}
+            className="input w-40 shrink-0"
+          >
+            {LIMIT_PERIOD_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <span className="text-xs text-slate-400 block mt-1">
+          期間を選ぶと、その期間内はこの個数までしか結果を出しません
+          （区切りは日本時間の0時。端末をまたいでもサーバー側で数えます）。
+          「制限なし」なら個数は記録のみで、回数は制限されません。
+        </span>
       </Field>
       <Field label="延長確認日（1年契約の3ヶ月前が目安）">
         <div className="flex gap-2">

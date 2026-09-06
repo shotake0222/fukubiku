@@ -28,6 +28,7 @@ export default function NewOrderPage() {
         due_date: value.due_date || null,
         person_in_charge: value.person_in_charge || null,
         quantity: value.quantity ? Number(value.quantity) : null,
+        limit_period: value.limit_period,
         renewal_check_date: value.renewal_check_date || null,
         cooldown_hours: value.cooldown_hours === "" ? null : Number(value.cooldown_hours),
         notes: value.notes || null,

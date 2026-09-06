@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
+import { LIMIT_PERIOD_OPTIONS, limitPeriodLabel } from "@/lib/drawLimit";
 import { generateHash } from "@/lib/hash";
 import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
@@ -81,6 +82,8 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
   // 再表示までの間隔(時間)。空欄なら既定値(1時間)、"0" なら制限なし。
   // 一括作成ではこの設定を作成するすべての注文に同じ値で適用する。
   const [cooldownHours, setCooldownHours] = useState("");
+  // 個数を「どの期間あたりの上限」とみなすか。作成するすべての注文に同じ値を適用する。
+  const [limitPeriod, setLimitPeriod] = useState("none");
   const [notes, setNotes] = useState("");
   const [displayType, setDisplayType] = useState<DisplayType>("aframe");
 
@@ -229,6 +232,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
           due_date: dueDate || null,
           person_in_charge: personInCharge || null,
           quantity: row.quantity ? Number(row.quantity) : null,
+          limit_period: limitPeriod,
           renewal_check_date: renewalCheckDate || null,
           cooldown_hours: cooldownHours === "" ? null : Number(cooldownHours),
           notes: notes || null,
@@ -259,8 +263,10 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
 
   function downloadCsv() {
     if (!results) return;
-    const header = "景品名,個数,URL\n";
-    const body = results.map((r) => `${r.label},${r.quantity},${r.url}`).join("\n");
+    const header = "景品名,個数,上限期間,URL\n";
+    const body = results
+      .map((r) => `${r.label},${r.quantity},${limitPeriodLabel(limitPeriod)},${r.url}`)
+      .join("\n");
     const blob = new Blob([header + body], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -281,6 +287,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
               <tr>
                 <th className="px-4 py-2">景品名</th>
                 <th className="px-4 py-2">個数</th>
+                <th className="px-4 py-2">上限期間</th>
                 <th className="px-4 py-2">URL</th>
               </tr>
             </thead>
@@ -289,6 +296,7 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
                 <tr key={r.url}>
                   <td className="px-4 py-2">{r.label}</td>
                   <td className="px-4 py-2">{r.quantity}</td>
+                  <td className="px-4 py-2">{limitPeriodLabel(limitPeriod)}</td>
                   <td className="px-4 py-2">
                     <code className="text-xs break-all">{r.url}</code>
                   </td>
@@ -383,6 +391,25 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
               同じ人が共有URLを開き直しても、この時間が経つまでは結果を出さず
               「時間をおいて再チャレンジ」と案内します。0 で制限なし。
               ここで作成するすべての注文に同じ値が入ります。
+            </span>
+          </label>
+          <label className="space-y-1 block">
+            <span className="text-sm font-medium">個数を何の上限とするか</span>
+            <select
+              value={limitPeriod}
+              onChange={(e) => setLimitPeriod(e.target.value)}
+              className="input"
+            >
+              {LIMIT_PERIOD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-400 block">
+              期間を選ぶと、景品ごとの「個数」がその期間内の表示回数の上限になります
+              （区切りは日本時間の0時。端末をまたいでもサーバー側で数えます）。
+              「制限なし」なら個数は記録のみです。
             </span>
           </label>
           <label className="space-y-1 block sm:col-span-2">

@@ -3,6 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { PRESET_CATEGORIES } from "@/lib/types";
 import type { DrawGroup, DrawGroupEntry, Order, PresetObject } from "@/lib/types";
 import {
+  buildLimitReachedMessage,
+  isLimitPeriod,
+  limitWindowStart,
+} from "@/lib/drawLimit";
+import {
   DRAW_COOLDOWN_HOURS,
   buildRetryMessage,
   decodeDrawCookieValue,
@@ -529,6 +534,37 @@ export async function GET(
         Math.round(cooldownHours * 3600) +
         "; Path=/; SameSite=Lax"
       : undefined;
+
+  // --- 表示回数の上限(注文フローのみ) ---
+  // Cookieは端末ごとにしか効かないため、景品の個数そのものを守るには
+  // サーバー側で実際の表示回数を数える必要がある。
+  // orders.quantity を上限回数、orders.limit_period をその期間として扱う。
+  if (order && order.quantity && order.quantity > 0) {
+    const period = isLimitPeriod(order.limit_period) ? order.limit_period : "none";
+    const windowStart = limitWindowStart(period);
+    if (windowStart) {
+      // 先に1行記録してから件数を数える。
+      // 「数えてから記録」だと同時アクセスで上限を超えて配布されうるが、
+      // 「記録してから数える」なら各リクエストが必ず異なる件数を見るため超過しない。
+      const { data: logRow } = await supabase
+        .from("draw_logs")
+        .insert({ hash: params.hash })
+        .select("id")
+        .single();
+
+      const { count } = await supabase
+        .from("draw_logs")
+        .select("id", { count: "exact", head: true })
+        .eq("hash", params.hash)
+        .gte("drawn_at", windowStart.toISOString());
+
+      if ((count ?? 0) > order.quantity) {
+        // 自分の分は配布しなかったので記録から取り消す(件数を正確に保つ)
+        if (logRow?.id) await supabase.from("draw_logs").delete().eq("id", logRow.id);
+        return simplePage(esc(buildLimitReachedMessage(period)));
+      }
+    }
+  }
 
   // 1) 注文(orders): 1件に固定の景品が割り当てられているフロー
   if (order) {

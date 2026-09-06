@@ -159,6 +159,10 @@ export interface Order {
    * 0 なら制限なし。抽選セット側の draw_groups.cooldown_hours と同じ役割。 */
   cooldown_hours: number | null;
 
+  /** quantity(個数)を「どの期間あたりの上限」とみなすか。
+   * "day" | "3days" | "week" | "none"(既定)。lib/drawLimit.ts 参照。 */
+  limit_period: string | null;
+
   created_at: string;
   updated_at: string;
 }
