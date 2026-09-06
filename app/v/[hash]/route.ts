@@ -62,43 +62,99 @@ if (window.AFRAME && !AFRAME.components["cap-pixel-ratio"]) {
   });
 }
 if (window.AFRAME && !AFRAME.components["marker-pose"]) {
+  // 1ユーロフィルタ(One Euro Filter)。
+  //
+  // 固定の平滑化係数だと「止まっているときの揺れを消す」と「動かしたときに
+  // 遅れずについてくる」が両立しない。係数を強めると揺れは減るが、
+  // マーカーを動かしたときにオブジェクトが遅れてついてくる。
+  // このフィルタは変化の速さを見て係数を自動で切り替える:
+  //   ほぼ止まっている → 強くならす(揺れが消える)
+  //   速く動いている   → 追従を優先する(遅れが出ない)
+  function OneEuro(minCutoff, beta, dCutoff) {
+    this.minCutoff = minCutoff;   // 静止時の遮断周波数(Hz)。小さいほど揺れに強い
+    this.beta = beta;             // 速さに応じて遮断周波数を上げる度合い
+    this.dCutoff = dCutoff;       // 速度自体をならす遮断周波数
+    this.x = null;                // 直前の出力
+    this.dx = 0;                  // ならした変化速度
+  }
+  OneEuro.prototype.alpha = function (cutoff, dtSec) {
+    var tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dtSec);
+  };
+  OneEuro.prototype.filter = function (value, dtSec) {
+    if (this.x === null) { this.x = value; return value; }
+    var dRaw = (value - this.x) / dtSec;
+    var aD = this.alpha(this.dCutoff, dtSec);
+    this.dx = aD * dRaw + (1 - aD) * this.dx;
+    var cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    var a = this.alpha(cutoff, dtSec);
+    this.x = a * value + (1 - a) * this.x;
+    return this.x;
+  };
+
   AFRAME.registerComponent("marker-pose", {
     schema: {
       stage: { type: "string" },
       hold: { default: 1200 },
-      lerp: { default: 0.35 }
+      // 静止時の遮断周波数(Hz)。小さいほど揺れに強いが、動かしたときの遅れが増える
+      minCutoff: { default: 0.7 },
+      // 速く動かしたときにどれだけ追従を優先するか
+      beta: { default: 0.35 },
+      // 回転の平滑化の強さ(位置と同じ考え方。単位はrad/s)
+      rotMinCutoff: { default: 0.7 },
+      rotBeta: { default: 0.6 }
     },
     init: function () {
       var THREE = AFRAME.THREE;
       this.p = new THREE.Vector3();
       this.q = new THREE.Quaternion();
       this.s = new THREE.Vector3();
+      this.prevQ = new THREE.Quaternion();
       this.started = false;
       this.lastSeen = 0;
       this.shown = false;
+      this.fx = new OneEuro(this.data.minCutoff, this.data.beta, 1);
+      this.fy = new OneEuro(this.data.minCutoff, this.data.beta, 1);
+      this.fz = new OneEuro(this.data.minCutoff, this.data.beta, 1);
+      this.fRot = new OneEuro(this.data.rotMinCutoff, this.data.rotBeta, 1);
+      this.rotSpeed = 0;
     },
     tick: function (time, dt) {
       var stageEl = this.stageEl || (this.stageEl = document.querySelector(this.data.stage));
       if (!stageEl || !stageEl.object3D) return;
+      var THREE = AFRAME.THREE;
       var m = this.el.object3D;
       var st = stageEl.object3D;
       if (m.visible) {
         m.updateMatrixWorld(true);
         m.matrixWorld.decompose(this.p, this.q, this.s);
+        // 四元数は符号が反転しても同じ回転を表す。前回と逆向きだと
+        // 補間が遠回りして跳ねるため、近い側へ揃えておく。
+        if (this.started && this.prevQ.dot(this.q) < 0) {
+          this.q.set(-this.q.x, -this.q.y, -this.q.z, -this.q.w);
+        }
         if (!this.started) {
           st.position.copy(this.p); st.quaternion.copy(this.q); st.scale.copy(this.s);
+          this.prevQ.copy(this.q);
           this.started = true;
         } else {
-          // 指数移動平均。dtで正規化し、フレームレートが変わっても
-          // 追従の速さ(時定数)が変わらないようにする。
-          // 線形にdtを掛けると低フレームレート時に係数が1を超えて
-          // 補間が効かなくなるため、1-(1-lerp)^(dt/16.7) を使う。
-          var a = 1 - Math.pow(1 - this.data.lerp, dt / 16.7);
-          if (!(a > 0)) a = this.data.lerp;
-          if (a > 1) a = 1;
-          st.position.lerp(this.p, a);
-          st.quaternion.slerp(this.q, a);
-          st.scale.lerp(this.s, a);
+          var dtSec = dt > 0 ? dt / 1000 : 1 / 60;
+          st.position.set(
+            this.fx.filter(this.p.x, dtSec),
+            this.fy.filter(this.p.y, dtSec),
+            this.fz.filter(this.p.z, dtSec)
+          );
+          // 回転も位置と同じ考え方。今の姿勢から目標までの角速度(rad/s)を
+          // ならしたうえで、速いほど追従を優先するよう補間率を決める。
+          var angle = 2 * Math.acos(Math.min(1, Math.abs(st.quaternion.dot(this.q))));
+          var speed = this.fRot.filter(angle / dtSec, dtSec);
+          var cutoff = this.data.rotMinCutoff + this.data.rotBeta * Math.abs(speed);
+          var tau = 1 / (2 * Math.PI * cutoff);
+          var aR = 1 / (1 + tau / dtSec);
+          st.quaternion.slerp(this.q, Math.min(1, Math.max(0, aR)));
+          this.prevQ.copy(this.q);
+          // 大きさはほぼ揺れないので軽く追従させるだけでよい
+          st.scale.lerp(this.s, Math.min(1, 0.2 * (dt / 16.7)));
         }
         this.lastSeen = time;
         if (!this.shown) {
@@ -277,7 +333,7 @@ function buildArHtml(opts: {
   // マーカー側は姿勢の供給だけを担当する(marker-pose)。
   const stageMarkup =
     '<a-entity id="ar-stage" visible="false">' + suspenseMarkup + objectMarkupGated + "</a-entity>";
-  const poseAttr = ' marker-pose="stage: #ar-stage; hold: 1200; lerp: 0.35"';
+  const poseAttr = ' marker-pose="stage: #ar-stage; hold: 1200"';
 
   const sceneMarkup = opts.useMindAr
     ? '<a-scene mindar-image="imageTargetSrc: ' + esc(opts.mindFileUrl || "") + '; uiScanning: no; uiLoading: no;"' +
