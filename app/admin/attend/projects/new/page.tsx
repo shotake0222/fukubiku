@@ -7,6 +7,7 @@ import AttendProjectForm, {
   emptyAttendProjectForm,
   type AttendProjectFormValue,
 } from "@/components/AttendProjectForm";
+import { createDefaultRally } from "@/lib/rallyDefaults";
 
 export default function NewAttendProjectPage() {
   const router = useRouter();
@@ -35,11 +36,17 @@ export default function NewAttendProjectPage() {
       .select("id")
       .single();
 
-    setSaving(false);
     if (error || !data) {
+      setSaving(false);
       setError(`保存に失敗しました: ${error?.message ?? ""}`);
       return;
     }
+
+    // あてんどの標準機能としてスタンプラリーを1本用意しておく。
+    // 失敗しても案件自体は作れているので、案件画面から作り直せるよう握りつぶす。
+    await createDefaultRally(supabase, data.id, value.client_name).catch(() => null);
+
+    setSaving(false);
     router.push(`/admin/attend/projects/${data.id}`);
   }
 

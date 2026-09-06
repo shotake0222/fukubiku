@@ -410,3 +410,117 @@ export interface AttendMarkerWithImages extends AttendMarker {
 export interface AttendMarkerWithProject extends AttendMarkerWithImages {
   project_name: string;
 }
+
+// ---- あてんど: スタンプラリー ----
+//
+// 「設定したスポットを見に行くとスタンプが貯まるWebApp」。
+// 参加者は /r/[hash] を開くだけで参加でき、アカウント登録は不要。
+// 進捗はサーバー(attend_rally_stamps)に保存し、Cookieの参加者IDで紐づける。
+
+export type AttendRallyStatus = "draft" | "active" | "archived";
+export type AttendRallyTheme = "washi" | "night" | "pop";
+/** スタンプの取得方法。どれで押しても1スポット1個。 */
+export type AttendStampMethod = "gps" | "qr" | "nfc" | "code" | "manual";
+
+export const ATTEND_RALLY_THEMES: { value: AttendRallyTheme; label: string; hint: string }[] = [
+  { value: "washi", label: "和紙（生成り）", hint: "神社仏閣・門前町・城下町向けの落ち着いた配色" },
+  { value: "night", label: "夜市（濃紺）", hint: "夜のイベント・ライトアップ・祭り向け" },
+  { value: "pop", label: "ポップ（明色）", hint: "商店街・ファミリー向けイベント向け" },
+];
+
+export const ATTEND_STAMP_METHOD_LABEL: Record<AttendStampMethod, string> = {
+  gps: "GPS",
+  qr: "QR",
+  nfc: "NFC",
+  code: "合言葉",
+  manual: "手動付与",
+};
+
+export interface AttendRally {
+  id: string;
+  project_id: string;
+  name: string;
+  hash: string;
+  description: string | null;
+  status: AttendRallyStatus;
+  /** コンプリートに必要な個数。null なら全スポット。 */
+  required_count: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  theme: AttendRallyTheme;
+
+  reward_coupon_enabled: boolean;
+  reward_coupon_label: string;
+  reward_coupon_note: string | null;
+
+  reward_object_source: ObjectSource | null;
+  reward_preset_object_id: string | null;
+  reward_custom_model_url: string | null;
+  reward_message: string;
+
+  /** 引換窓口で「使用済み」にする時の暗証番号。参加者側には絶対に送らない。 */
+  staff_pin: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendRallySpot {
+  id: string;
+  rally_id: string;
+  name: string;
+  description: string | null;
+  sort_order: number;
+
+  gps_enabled: boolean;
+  gps_lat: number | null;
+  gps_lng: number | null;
+  gps_radius_m: number;
+
+  /** QR・NFC・合言葉で共通に使う識別子（ラリー内で一意）。 */
+  spot_code: string | null;
+  code_enabled: boolean;
+
+  object_source: ObjectSource;
+  preset_object_id: string | null;
+  custom_model_url: string | null;
+  position: string;
+  scale: string | null;
+  rotation_y: number;
+
+  stamp_label: string | null;
+  stamp_color: string;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendRallyParticipant {
+  id: string;
+  rally_id: string;
+  restore_code: string;
+  nickname: string | null;
+  created_at: string;
+  last_seen_at: string;
+}
+
+export interface AttendRallyStamp {
+  id: string;
+  participant_id: string;
+  spot_id: string;
+  method: AttendStampMethod;
+  lat: number | null;
+  lng: number | null;
+  accuracy_m: number | null;
+  created_at: string;
+}
+
+export interface AttendRallyReward {
+  id: string;
+  rally_id: string;
+  participant_id: string;
+  coupon_code: string;
+  issued_at: string;
+  redeemed_at: string | null;
+  redeemed_note: string | null;
+}

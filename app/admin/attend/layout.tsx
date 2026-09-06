@@ -20,6 +20,9 @@ export default function AttendLayout({ children }: { children: React.ReactNode }
         <Link href="/admin/attend/projects/new" className="hover:text-pink-600">
           新規案件
         </Link>
+        <Link href="/admin/attend/rallies" className="hover:text-pink-600">
+          スタンプラリー
+        </Link>
         <Link href="/admin/attend/presets" className="hover:text-pink-600">
           オブジェクト管理
         </Link>

@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { generateHash } from "@/lib/hash";
 import AttendProjectForm, { type AttendProjectFormValue } from "@/components/AttendProjectForm";
+import { createDefaultRally } from "@/lib/rallyDefaults";
 import { attendDisplayTypeShort } from "@/lib/types";
-import type { AttendItem, AttendProject, AttendProjectStatus } from "@/lib/types";
+import type { AttendItem, AttendProject, AttendProjectStatus, AttendRally } from "@/lib/types";
 
 const itemStatusLabel: Record<string, string> = {
   draft: "下書き",
@@ -19,6 +20,10 @@ const projectStatusLabel: Record<AttendProjectStatus, string> = {
   active: "運用中",
   archived: "アーカイブ",
 };
+
+export interface AttendRallyWithSpotCount extends AttendRally {
+  spot_count: number;
+}
 
 export interface AttendItemWithTriggerCount extends AttendItem {
   trigger_count: number;
@@ -35,12 +40,20 @@ const TRIGGER_BADGE_CLASS: Record<string, string> = {
   mindar_face: "bg-rose-100 text-rose-700",
 };
 
+const rallyStatusLabel: Record<string, string> = {
+  draft: "下書き",
+  active: "公開中",
+  archived: "アーカイブ",
+};
+
 export default function AttendProjectEditor({
   project,
   items,
+  rallies,
 }: {
   project: AttendProject;
   items: AttendItemWithTriggerCount[];
+  rallies: AttendRallyWithSpotCount[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -60,6 +73,7 @@ export default function AttendProjectEditor({
   const [status, setStatus] = useState<AttendProjectStatus>(project.status);
   const [saving, setSaving] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
+  const [addingRally, setAddingRally] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const siteOrigin = process.env.NEXT_PUBLIC_ATTEND_SITE_URL || "https://app.attend-ar.com";
@@ -91,6 +105,18 @@ export default function AttendProjectEditor({
       return;
     }
     router.refresh();
+  }
+
+  async function handleAddRally() {
+    setAddingRally(true);
+    setError(null);
+    const created = await createDefaultRally(supabase, project.id, project.client_name);
+    setAddingRally(false);
+    if (!created) {
+      setError("スタンプラリーの作成に失敗しました");
+      return;
+    }
+    router.push(`/admin/attend/rallies/${created.id}`);
   }
 
   async function handleAddItem() {
@@ -172,6 +198,66 @@ export default function AttendProjectEditor({
         >
           {saving ? "保存中..." : "保存"}
         </button>
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">スタンプラリー</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              スポットをめぐるとスタンプが貯まるWebAppです。参加者はURLを開くだけで始められます
+              （アプリのインストールも会員登録も不要）。
+              GPS・QR・NFC・合言葉のどれでもスタンプを押せるので、物理スタンプ台と並べて置けます。
+            </p>
+          </div>
+          <button
+            onClick={handleAddRally}
+            disabled={addingRally}
+            className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50 shrink-0"
+          >
+            {addingRally ? "作成中..." : "+ ラリーを作成"}
+          </button>
+        </div>
+
+        <ul className="divide-y">
+          {rallies.map((r) => (
+            <li key={r.id} className="py-3 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/admin/attend/rallies/${r.id}`}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  {r.name}
+                </Link>
+                <p className="text-xs text-slate-500">
+                  スタンプ {r.spot_count}個 ・{" "}
+                  {r.required_count ? `${r.required_count}個でコンプリート` : "全部でコンプリート"}
+                </p>
+                <code className="text-[11px] text-slate-400 break-all">{`${siteOrigin}/r/${r.hash}`}</code>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] shrink-0 ${
+                  r.status === "active"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {rallyStatusLabel[r.status] ?? r.status}
+              </span>
+              <Link
+                href={`/admin/attend/rallies/${r.id}`}
+                className="text-sm text-blue-600 hover:underline shrink-0"
+              >
+                編集
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {rallies.length === 0 && (
+          <p className="text-sm text-slate-400 py-6 text-center">
+            まだラリーがありません。「+ ラリーを作成」で3スポットの雛形ができます。
+          </p>
+        )}
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">

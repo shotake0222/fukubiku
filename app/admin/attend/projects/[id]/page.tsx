@@ -1,17 +1,22 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AttendProjectEditor, { type AttendItemWithTriggerCount } from "@/components/AttendProjectEditor";
-import type { AttendItem, AttendProject, AttendTrigger } from "@/lib/types";
+import type { AttendItem, AttendProject, AttendRally, AttendTrigger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AttendProjectPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
 
-  const [{ data: project, error }, { data: items }] = await Promise.all([
+  const [{ data: project, error }, { data: items }, { data: rallies }] = await Promise.all([
     supabase.from("attend_projects").select("*").eq("id", params.id).single(),
     supabase
       .from("attend_items")
+      .select("*")
+      .eq("project_id", params.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("attend_rallies")
       .select("*")
       .eq("project_id", params.id)
       .order("created_at", { ascending: true }),
@@ -43,5 +48,28 @@ export default async function AttendProjectPage({ params }: { params: { id: stri
     trigger_types: typesByItem.get(i.id) ?? [],
   }));
 
-  return <AttendProjectEditor project={project as AttendProject} items={itemsWithCount} />;
+  // ラリーごとのスポット数（一覧に「スタンプ何個か」を出すため）
+  const rallyList = (rallies as AttendRally[] | null) ?? [];
+  const { data: spotRows } = rallyList.length
+    ? await supabase
+        .from("attend_rally_spots")
+        .select("id, rally_id")
+        .in(
+          "rally_id",
+          rallyList.map((r) => r.id)
+        )
+    : { data: [] as { id: string; rally_id: string }[] };
+
+  const spotCount = new Map<string, number>();
+  for (const s of ((spotRows as { id: string; rally_id: string }[] | null) ?? [])) {
+    spotCount.set(s.rally_id, (spotCount.get(s.rally_id) ?? 0) + 1);
+  }
+
+  return (
+    <AttendProjectEditor
+      project={project as AttendProject}
+      items={itemsWithCount}
+      rallies={rallyList.map((r) => ({ ...r, spot_count: spotCount.get(r.id) ?? 0 }))}
+    />
+  );
 }
