@@ -204,10 +204,25 @@ function simplePage(bodyHtml: string, status = 200): Response {
 // 「結果が出るのが早すぎる」ため5秒に固定する。
 const REVEAL_DELAY_MS = 5000;
 
+// 表示エンジンごとの「正面がカメラを向く」既定の向き。
+//
+// AR.js(マーカー): マーカー面がXZ平面で法線が+Y。正面が+Zのモデルは
+//   X軸まわりに-90度回すと立ち上がって視聴者側を向く。
+// MindAR(画像認識): ターゲット画像がXY平面で法線が+Z。つまり最初から
+//   カメラの方を向いているので、回してはいけない。
+//
+// 以前は両方に -90 0 0 を使っていたため、画像認識ではオブジェクトが
+// ターゲット画像と平行に寝てしまい、真横から見た状態になっていた。
+// (Playwrightで実測: -90 0 0 は正面とカメラの向きの内積が-0.087=ほぼ直角、
+//  0 0 0 なら0.996でほぼ正対)
+function baseRotationFor(useMindAr: boolean): string {
+  return useMindAr ? "0 0 0" : "-90 0 0";
+}
+
 function buildArHtml(opts: {
   modelUrl: string;
   markerUrl: string;
-  rotation: string;
+  rotation: string | null;
   scale: string;
   position: string;
   mindFileUrl: string | null;
@@ -218,6 +233,7 @@ function buildArHtml(opts: {
   notice: string | null;
 }): string {
   const kind = assetKind(opts.modelUrl);
+  const rotation = opts.rotation || baseRotationFor(opts.useMindAr);
   // 焦らし演出は「結果も3Dモデル」のときだけ入れる。
   // 平面(動画/画像)の結果に3Dの焦らしを挟むと見た目の連続性が崩れるため。
   const suspenseUrl = kind === "model" ? opts.suspenseUrl : null;
@@ -226,17 +242,17 @@ function buildArHtml(opts: {
   if (kind === "video") {
     objectMarkup =
       '<a-entity id="ar-object" alpha-video="src: ' + esc(opts.modelUrl) + '"' +
-      ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
+      ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
       ' scale="' + esc(opts.scale) + '"></a-entity>';
   } else if (kind === "image") {
     objectMarkup =
       '<a-entity id="ar-object" gif-image="src: ' + esc(opts.modelUrl) + '"' +
-      ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
+      ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
       ' scale="' + esc(opts.scale) + '"></a-entity>';
   } else {
     objectMarkup =
       '<a-entity id="ar-object" gltf-model="url(' + esc(opts.modelUrl) + ')"' +
-      ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
+      ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
       ' scale="' + esc(opts.scale) + '"' +
       // timeScale:0で待機させ、実際に表示された瞬間に再生を開始する。
       // (マーカーを見つける前に一度きりのアニメーションが終わってしまうのを防ぐ)
@@ -247,7 +263,7 @@ function buildArHtml(opts: {
   // 違和感なく差し替わるようにする。ループ再生で5秒間動かし続ける。
   const suspenseMarkup = suspenseUrl
     ? '<a-entity id="ar-suspense" gltf-model="url(' + esc(suspenseUrl) + ')"' +
-      ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
+      ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
       ' scale="' + esc(opts.scale) + '"' +
       ' animation-mixer="loop: repeat; timeScale: 0"></a-entity>'
     : "";
@@ -457,10 +473,9 @@ export async function GET(
       useMindAr,
       suspenseUrl: o.noSuspense ? null : suspenseUrlFor(o.category ?? null),
       notice: o.notice ?? null,
-      // 旧実装(index.html)と同じ既定値。
-      // AR.jsのマーカー座標系は「マーカー面=XZ平面 / 法線=+Y」であることを実測済みで、
-      // 正面が+Zのモデル/平面はX軸まわりに-90度回すと視聴者側を向く。
-      rotation: o.rotation || "-90 0 0",
+      // 向きの既定値は表示エンジンによって変わるため buildArHtml 側で決める
+      // (baseRotationFor を参照)。保存された値があればそれを優先する。
+      rotation: o.rotation,
       // 既定の大きさ。実機で「小さい」という指摘が続いたため、
       // 3Dモデル 1→2、平面(動画/画像) 3→6 と2倍に引き上げている。
       // プリセットに個別の大きさが保存されている場合はそちらが優先される。
