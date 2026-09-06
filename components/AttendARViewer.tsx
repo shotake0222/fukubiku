@@ -134,6 +134,20 @@ function GpsGuide({
   );
 }
 
+// 表示エンジンごとの「正面がカメラを向く」基準の向き。
+//
+// AR.js(マーカー): マーカー面がXZ平面で法線が+Y。正面が+Zのモデルは
+//   X軸まわりに-90度回すと立ち上がって視聴者側を向く。
+// それ以外(画像認識・顔認識・GPS・NFC): 面の法線が+Zで最初からカメラを向くため、
+//   回してはいけない。回すと画像や地面と平行に寝てしまう。
+//
+// 以前はすべてに -90 0 0 を掛けていたため、GPSの
+// ランドマークが横倒しになっていた。
+function baseRotationFor(displayType: AttendDisplayType, rotationY: number): string {
+  const x = displayType === "aframe" ? -90 : 0;
+  return `${x} ${rotationY} 0`;
+}
+
 function engineSrcFor(displayType: AttendDisplayType): string | null {
   if (displayType === "aframe" || displayType === "gps") return ARJS_SRC;
   if (displayType === "mindar_image") return MINDAR_IMAGE_AFRAME_SRC;
@@ -202,7 +216,13 @@ function NfcScene({ trigger }: { trigger: ResolvedTrigger }) {
         {/* カメラは原点。少し前方に置くと目の前に浮かんで見える */}
         <a-entity position="0 0 -2">
           {trigger.objects.map((o, i) => (
-            <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+            <ObjectEntity
+                key={i}
+                url={o.url}
+                position={o.position}
+                scale={o.scale}
+                rotation={baseRotationFor(trigger.displayType, o.rotationY)}
+              />
           ))}
         </a-entity>
         <a-entity camera look-controls="magicWindowTrackingEnabled: true; mouseEnabled: false; touchEnabled: false"></a-entity>
@@ -329,7 +349,13 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
               {trigger.objects
                 .filter((o) => o.targetIndex == null || o.targetIndex === idx)
                 .map((o, i) => (
-                  <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+                  <ObjectEntity
+                key={i}
+                url={o.url}
+                position={o.position}
+                scale={o.scale}
+                rotation={baseRotationFor(trigger.displayType, o.rotationY)}
+              />
                 ))}
             </a-entity>
           ))}
@@ -348,7 +374,13 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
           <a-camera active="false" position="0 0 0"></a-camera>
           <a-entity mindar-face-target={`anchorIndex: ${anchorIndex}`}>
             {trigger.objects.map((o, i) => (
-              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+              <ObjectEntity
+                key={i}
+                url={o.url}
+                position={o.position}
+                scale={o.scale}
+                rotation={baseRotationFor(trigger.displayType, o.rotationY)}
+              />
             ))}
           </a-entity>
         </a-scene>
@@ -363,7 +395,13 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
         >
           <a-marker type="pattern" url={marker}>
             {trigger.objects.map((o, i) => (
-              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+              <ObjectEntity
+                key={i}
+                url={o.url}
+                position={o.position}
+                scale={o.scale}
+                rotation={baseRotationFor(trigger.displayType, o.rotationY)}
+              />
             ))}
           </a-marker>
           <a-entity camera></a-entity>
@@ -380,7 +418,13 @@ function TriggerScene({ trigger }: { trigger: ResolvedTrigger }) {
           <a-camera gps-camera="gpsMinDistance: 1" rotation-reader></a-camera>
           <a-entity gps-entity-place={`latitude: ${trigger.gpsLat}; longitude: ${trigger.gpsLng}`} scale="8 8 8">
             {trigger.objects.map((o, i) => (
-              <ObjectEntity key={i} url={o.url} position={o.position} scale={o.scale} rotationY={o.rotationY} />
+              <ObjectEntity
+                key={i}
+                url={o.url}
+                position={o.position}
+                scale={o.scale}
+                rotation={baseRotationFor(trigger.displayType, o.rotationY)}
+              />
             ))}
           </a-entity>
         </a-scene>
