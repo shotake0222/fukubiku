@@ -22,6 +22,94 @@ export const dynamic = "force-dynamic";
 
 const ALPHA_VIDEO_COMPONENT = "\nif (window.AFRAME && !AFRAME.components[\"alpha-video\"]) {\n  AFRAME.registerComponent(\"alpha-video\", {\n    schema: { src: { type: \"string\" } },\n    init: function () {\n      var THREE = AFRAME.THREE;\n      var self = this;\n      var video = document.createElement(\"video\");\n      video.src = this.data.src;\n      video.crossOrigin = \"anonymous\";\n      video.loop = true;\n      video.muted = true;\n      video.playsInline = true;\n      video.setAttribute(\"playsinline\", \"\");\n      video.setAttribute(\"webkit-playsinline\", \"true\");\n      this.video = video;\n      var tryPlay = function () { video.play().catch(function () {}); };\n      tryPlay();\n      document.addEventListener(\"touchend\", tryPlay, { once: true });\n      document.addEventListener(\"click\", tryPlay, { once: true });\n      var texture = new THREE.VideoTexture(video);\n      texture.minFilter = THREE.LinearFilter;\n      texture.magFilter = THREE.LinearFilter;\n      var material = new THREE.ShaderMaterial({\n        uniforms: { map: { value: texture } },\n        transparent: true,\n        side: THREE.DoubleSide,\n        vertexShader:\n          \"varying vec2 vUv; void main(){ vUv = uv;\" +\n          \" gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }\",\n        fragmentShader:\n          \"uniform sampler2D map; varying vec2 vUv;\" +\n          \" void main(){ vec2 cUv = vec2(vUv.x*0.5, vUv.y);\" +\n          \" vec2 aUv = vec2(vUv.x*0.5+0.5, vUv.y);\" +\n          \" vec3 c = texture2D(map, cUv).rgb;\" +\n          \" float a = texture2D(map, aUv).r;\" +\n          \" if (a < 0.02) discard;\" +\n          \" gl_FragColor = vec4(c, a); }\"\n      });\n      var mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);\n      this.mesh = mesh;\n      this.el.setObject3D(\"alpha-video-mesh\", mesh);\n      video.addEventListener(\"loadedmetadata\", function () {\n        var w = video.videoWidth / 2 || 1;\n        var h = video.videoHeight || 1;\n        self.mesh.scale.set(1, h / w, 1);\n      });\n    },\n    remove: function () {\n      if (this.mesh) this.el.removeObject3D(\"alpha-video-mesh\");\n      if (this.video) { this.video.pause(); this.video.src = \"\"; }\n    }\n  });\n}\nif (window.AFRAME && !AFRAME.components[\"gif-image\"]) {\n  AFRAME.registerComponent(\"gif-image\", {\n    schema: { src: { type: \"string\" } },\n    init: function () {\n      var THREE = AFRAME.THREE;\n      var self = this;\n      this.img = document.createElement(\"img\");\n      this.img.crossOrigin = \"anonymous\";\n      this.canvas = document.createElement(\"canvas\");\n      this.canvas.width = 2; this.canvas.height = 2;\n      this.ctx = this.canvas.getContext(\"2d\");\n      this.texture = new THREE.CanvasTexture(this.canvas);\n      this.img.onload = function () {\n        var w0 = self.img.naturalWidth || 1, h0 = self.img.naturalHeight || 1;\n        self.canvas.width = w0; self.canvas.height = h0;\n        var material = new THREE.MeshBasicMaterial({\n          map: self.texture, transparent: true, side: THREE.DoubleSide\n        });\n        self.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, h0 / w0), material);\n        self.el.setObject3D(\"gif-mesh\", self.mesh);\n      };\n      this.img.src = this.data.src;\n    },\n    tick: function () {\n      if (this.ctx && this.img.complete && this.img.naturalWidth) {\n        try {\n          this.ctx.drawImage(this.img, 0, 0, this.canvas.width, this.canvas.height);\n          this.texture.needsUpdate = true;\n        } catch (e) {}\n      }\n    },\n    remove: function () { if (this.mesh) this.el.removeObject3D(\"gif-mesh\"); }\n  });\n}\n";
 
+// マーカーの姿勢を「マーカーの外側にある別エンティティ(ステージ)」へ写して描画する。
+//
+// AR.jsは検出処理のたびに、その回で検出できなかったマーカーのobject3D.visibleを
+// falseへ戻す。つまり1フレーム検出を落としただけでオブジェクトが消えるため、
+// マーカー直下にオブジェクトを置くと表示が途切れ続ける。
+// そこでマーカーには何も置かず、姿勢だけをステージへ渡す:
+//   - 姿勢は毎フレーム補間して追従させる(生の検出値をそのまま使うとガクガクする)
+//   - 検出が途切れても hold(ミリ秒) の間は直前の姿勢で表示を維持する
+// これによりMindAR側(targetLostで同様にvisibleが落ちる)も同じ扱いにできる。
+const TRACKING_COMPONENT = `
+if (window.AFRAME && !AFRAME.components["cap-pixel-ratio"]) {
+  // 高精細なスマホ(devicePixelRatio 3など)では、描画するピクセル数が
+  // 画面の9倍になりGPUが追いつかず、カクつきの原因になる。
+  // AR.jsは映像サイズに合わせてrendererのsetSizeを呼び直すが、
+  // setPixelRatioの値はその後も保持されるため、ここで一度だけ上限を設ける。
+  // 背景がカメラ映像である以上、2倍を超える解像度は見た目にほぼ寄与しない。
+  AFRAME.registerComponent("cap-pixel-ratio", {
+    schema: { max: { default: 2 } },
+    init: function () {
+      var self = this;
+      var apply = function () {
+        var r = self.el.renderer;
+        if (!r) return;
+        var want = Math.min(window.devicePixelRatio || 1, self.data.max);
+        if (r.getPixelRatio() !== want) r.setPixelRatio(want);
+      };
+      apply();
+      this.el.addEventListener("renderstart", apply);
+      window.addEventListener("arjs-video-loaded", apply);
+      window.addEventListener("resize", apply);
+    }
+  });
+}
+if (window.AFRAME && !AFRAME.components["marker-pose"]) {
+  AFRAME.registerComponent("marker-pose", {
+    schema: {
+      stage: { type: "string" },
+      hold: { default: 1200 },
+      lerp: { default: 0.35 }
+    },
+    init: function () {
+      var THREE = AFRAME.THREE;
+      this.p = new THREE.Vector3();
+      this.q = new THREE.Quaternion();
+      this.s = new THREE.Vector3();
+      this.started = false;
+      this.lastSeen = 0;
+      this.shown = false;
+    },
+    tick: function (time, dt) {
+      var stageEl = this.stageEl || (this.stageEl = document.querySelector(this.data.stage));
+      if (!stageEl || !stageEl.object3D) return;
+      var m = this.el.object3D;
+      var st = stageEl.object3D;
+      if (m.visible) {
+        m.updateMatrixWorld(true);
+        m.matrixWorld.decompose(this.p, this.q, this.s);
+        if (!this.started) {
+          st.position.copy(this.p); st.quaternion.copy(this.q); st.scale.copy(this.s);
+          this.started = true;
+        } else {
+          // 指数移動平均。dtで正規化し、フレームレートが変わっても
+          // 追従の速さ(時定数)が変わらないようにする。
+          // 線形にdtを掛けると低フレームレート時に係数が1を超えて
+          // 補間が効かなくなるため、1-(1-lerp)^(dt/16.7) を使う。
+          var a = 1 - Math.pow(1 - this.data.lerp, dt / 16.7);
+          if (!(a > 0)) a = this.data.lerp;
+          if (a > 1) a = 1;
+          st.position.lerp(this.p, a);
+          st.quaternion.slerp(this.q, a);
+          st.scale.lerp(this.s, a);
+        }
+        this.lastSeen = time;
+        if (!this.shown) {
+          this.shown = true;
+          st.visible = true;
+          stageEl.emit("ar-shown");
+        }
+      } else if (this.shown && time - this.lastSeen > this.data.hold) {
+        this.shown = false;
+        st.visible = false;
+        stageEl.emit("ar-hidden");
+      }
+    }
+  });
+}
+`;
+
 function esc(value: string): string {
   return value
     .replace(/&/g, "&amp;")
@@ -106,26 +194,35 @@ function buildArHtml(opts: {
     objectMarkup =
       '<a-entity id="ar-object" alpha-video="src: ' + esc(opts.modelUrl) + '"' +
       ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
-      ' scale="' + esc(opts.scale) + '" visible="false"></a-entity>';
+      ' scale="' + esc(opts.scale) + '"></a-entity>';
   } else if (kind === "image") {
     objectMarkup =
       '<a-entity id="ar-object" gif-image="src: ' + esc(opts.modelUrl) + '"' +
       ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
-      ' scale="' + esc(opts.scale) + '" visible="false"></a-entity>';
+      ' scale="' + esc(opts.scale) + '"></a-entity>';
   } else {
     objectMarkup =
       '<a-entity id="ar-object" gltf-model="url(' + esc(opts.modelUrl) + ')"' +
       ' position="' + esc(opts.position) + '" rotation="' + esc(opts.rotation) + '"' +
       ' scale="' + esc(opts.scale) + '"' +
-      ' animation-mixer="loop: once; clampWhenFinished: true" visible="false"></a-entity>';
+      // timeScale:0で待機させ、実際に表示された瞬間に再生を開始する。
+      // (マーカーを見つける前に一度きりのアニメーションが終わってしまうのを防ぐ)
+      ' animation-mixer="loop: once; clampWhenFinished: true; timeScale: 0"></a-entity>';
   }
+
+  // 表示オブジェクトはマーカー(ターゲット)の子ではなく、独立したステージに置く。
+  // マーカー側は姿勢の供給だけを担当する(marker-pose)。
+  const stageMarkup = '<a-entity id="ar-stage" visible="false">' + objectMarkup + "</a-entity>";
+  const poseAttr = ' marker-pose="stage: #ar-stage; hold: 1200; lerp: 0.35"';
 
   const sceneMarkup = opts.useMindAr
     ? '<a-scene mindar-image="imageTargetSrc: ' + esc(opts.mindFileUrl || "") + '; uiScanning: no; uiLoading: no;"' +
       ' color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights"' +
-      ' vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false">' +
+      ' vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"' +
+      ' cap-pixel-ratio>' +
       '<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>' +
-      '<a-entity id="ar-target" mindar-image-target="targetIndex: 0">' + objectMarkup + "</a-entity>" +
+      '<a-entity id="ar-target" mindar-image-target="targetIndex: 0"' + poseAttr + "></a-entity>" +
+      stageMarkup +
       "</a-scene>"
     // 動作実績のある旧実装(index.html)のarjs指定をそのまま踏襲する。
     // 旧実装は debugUIEnabled / trackingMethod / patternRatio のみを指定し、
@@ -133,20 +230,21 @@ function buildArHtml(opts: {
     // cameraParametersUrlだけは、AR.jsをCDNではなく自前配信(/vendor/aframe-ar.js)
     // している都合で既定の相対パスが解決できないため明示する。
     : '<a-scene embedded' +
+      // maxDetectionRateの既定は60。スマホでは毎秒60回のマーカー検出がCPUを占有し、
+      // 描画のフレーム落ち(ガクガク)の原因になるため30へ下げる。
+      // 検出間のフレームはmarker-pose側の補間が埋めるので見た目は滑らかになる。
       ' arjs="debugUIEnabled:false; trackingMethod:best; patternRatio: 0.9;' +
-      ' cameraParametersUrl: /vendor/camera_para.dat;"' +
-      ' vr-mode-ui="enabled: false">' +
-      '<a-marker id="ar-target" preset="custom" type="pattern" url="' + esc(opts.markerUrl) + '">' +
-      objectMarkup +
-      "</a-marker>" +
+      ' maxDetectionRate: 30; cameraParametersUrl: /vendor/camera_para.dat;"' +
+      ' vr-mode-ui="enabled: false" cap-pixel-ratio>' +
+      '<a-marker id="ar-target" preset="custom" type="pattern" url="' + esc(opts.markerUrl) + '"' +
+      poseAttr + "></a-marker>" +
+      stageMarkup +
       "<a-entity camera></a-entity>" +
       "</a-scene>";
 
   const engineScript = opts.useMindAr
     ? '<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>'
     : '<script src="/vendor/aframe-ar.js"></script>';
-
-  const foundEvent = opts.useMindAr ? "targetFound" : "markerFound";
 
   return [
     "<!DOCTYPE html>",
@@ -179,6 +277,7 @@ function buildArHtml(opts: {
     // a-sceneが解析される前に登録しておく必要があるため、head内で登録する。
     "<script>",
     ALPHA_VIDEO_COMPONENT,
+    TRACKING_COMPONENT,
     "<\/script>",
     "</head>",
     "<body>",
@@ -200,10 +299,16 @@ function buildArHtml(opts: {
     "      d.getHours()+'時'+String(d.getMinutes()).padStart(2,'0')+'分 '+week[d.getDay()]+'曜日';",
     "  }",
     "  stamp(); setInterval(stamp, 30000);",
-    "  var target = document.getElementById('ar-target');",
+    "  // 表示・非表示はmarker-poseコンポーネントが管理する。",
+    "  // ここでは初回表示のタイミングで一度きりのアニメーションを開始する。",
+    "  var stage = document.getElementById('ar-stage');",
     "  var obj = document.getElementById('ar-object');",
-    "  if (target && obj) {",
-    "    target.addEventListener('" + foundEvent + "', function(){ obj.setAttribute('visible','true'); });",
+    "  if (stage && obj) {",
+    "    stage.addEventListener('ar-shown', function(){",
+    "      if (obj.getAttribute('animation-mixer')) {",
+    "        obj.setAttribute('animation-mixer', 'timeScale', 1);",
+    "      }",
+    "    }, { once: true });",
     "  }",
     "  var snapImg = document.getElementById('snap');",
     "  var takeBtn = document.getElementById('take-photo');",
@@ -216,7 +321,7 @@ function buildArHtml(opts: {
     "    var arCanvas = null;",
     "    try { arCanvas = sceneEl.components.screenshot.getCanvas('perspective'); } catch (err) { arCanvas = null; }",
     "    if (!arCanvas) { arCanvas = document.querySelector('.a-canvas'); }",
-    // AR.jsはカメラ映像とWebGLキャンバスを画面より大きく描画し、",
+    "    // AR.jsはカメラ映像とWebGLキャンバスを画面より大きく描画し、",
     "    // 負のmarginで中央に寄せている(例: 390px幅の画面に1125px幅の映像)。",
     "    // そのため合成時も、各要素が画面上で実際に占めている矩形をそのまま使う。",
     "    // 画面いっぱいに引き伸ばすとオブジェクトが横に潰れてしまう。",
@@ -297,12 +402,16 @@ export async function GET(
     return new Response(html, { headers });
   };
 
+  // hashは orders と draw_groups のどちらかに一致する。
+  // 順番に問い合わせるとDBへの往復が2回直列になり、そのぶん表示開始が遅れるため
+  // 同時に投げる(Supabaseがアプリと別リージョンにある場合ほど効果が大きい)。
+  const [orderRes, groupRes] = await Promise.all([
+    supabase.from("orders").select("*").eq("hash", params.hash).maybeSingle(),
+    supabase.from("draw_groups").select("*").eq("hash", params.hash).maybeSingle(),
+  ]);
+
   // 1) 注文(orders): 1件に固定の景品が割り当てられているフロー
-  const { data: order } = await supabase
-    .from("orders")
-    .select("*")
-    .eq("hash", params.hash)
-    .single();
+  const order = orderRes.data;
 
   if (order) {
     const o = order as Order;
@@ -333,11 +442,7 @@ export async function GET(
   }
 
   // 2) 抽選セット(draw_groups): アクセスの都度その場で抽選するフロー
-  const { data: group } = await supabase
-    .from("draw_groups")
-    .select("*")
-    .eq("hash", params.hash)
-    .single();
+  const group = groupRes.data;
 
   if (!group) {
     return simplePage("お探しのページは見つかりませんでした。", 404);
