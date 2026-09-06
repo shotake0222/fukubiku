@@ -95,34 +95,6 @@ export function loadArScript(src: string, timeoutMs = 20000): Promise<void> {
   });
 }
 
-// .glbは作られ方によって原点の位置がバラバラで、そのまま置くとマーカーから
-// 上下left右にずれて浮いてしまう(実機で「マーカーから離れて表示される」状態)。
-// 読み込み完了時にモデルの外接直方体を測り、その中心がマーカーの原点に来るよう
-// 中身をオフセットして、どのモデルでもマーカーにぴったり付くようにする。
-export function registerCenterModelComponent(AFRAME: any) {
-  if (AFRAME.components["center-model"]) return;
-  AFRAME.registerComponent("center-model", {
-    init() {
-      const apply = () => {
-        const THREE = AFRAME.THREE;
-        const mesh = this.el.getObject3D("mesh");
-        if (!mesh) return;
-        this.el.object3D.updateMatrixWorld(true);
-        const box = new THREE.Box3().setFromObject(mesh);
-        if (box.isEmpty()) return;
-        const center = new THREE.Vector3();
-        box.getCenter(center);
-        // ワールド座標の中心を、このエンティティのローカル座標に変換して打ち消す
-        this.el.object3D.worldToLocal(center);
-        mesh.position.sub(center);
-      };
-      this.el.addEventListener("model-loaded", apply);
-      // 既に読み込み済みのケース(イベントを取り逃した場合)にも対応
-      if (this.el.getObject3D("mesh")) apply();
-    },
-  });
-}
-
 export function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
@@ -321,7 +293,6 @@ export function ObjectEntity({
   return (
     <a-entity
       gltf-model={`url(${url})`}
-      center-model=""
       position={position === "0 0.6 0" ? "0 0 0" : position}
       scale={scale || DEFAULT_MODEL_SCALE}
       rotation={modelRotation}

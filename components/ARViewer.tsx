@@ -13,7 +13,6 @@ import {
   isCategorySuspenseAvailable,
   loadArScript,
   registerAlphaVideoComponent,
-  registerCenterModelComponent,
   registerGifImageComponent,
 } from "./arObjectComponents";
 import {
@@ -147,7 +146,6 @@ export default function ARViewer({
     if (aframeLoaded && AFRAME && !registeredRef.current) {
       registerGifImageComponent(AFRAME);
       registerAlphaVideoComponent(AFRAME);
-      registerCenterModelComponent(AFRAME);
       registeredRef.current = true;
     }
   }, [aframeLoaded]);
@@ -396,10 +394,38 @@ export default function ARViewer({
       } else {
         const obj = modelEl.object3D;
         const loaded = !!obj && obj.children.length > 0;
-        lines.push(
-          `model: 読込=${loaded ? "済" : "まだ"} visible=${modelEl.getAttribute("visible")}` +
-            ` scale=${modelEl.getAttribute("scale") ?? "-"} rot=${modelEl.getAttribute("rotation") ?? "-"}`
-        );
+        const vec = (name: string) => {
+          const v = modelEl.getAttribute(name);
+          if (v == null) return "-";
+          if (typeof v === "object") {
+            const n = (x: number) => Math.round((x ?? 0) * 100) / 100;
+            return `${n(v.x)},${n(v.y)},${n(v.z)}`;
+          }
+          return String(v);
+        };
+        lines.push(`model: 読込=${loaded ? "済" : "まだ"} visible=${modelEl.getAttribute("visible")}`);
+        lines.push(`  scale=${vec("scale")} rot=${vec("rotation")} pos=${vec("position")}`);
+        // 実際に画面のどこへ描かれているかを、カメラから見た座標で確認する
+        try {
+          const THREE = (window as any).AFRAME?.THREE;
+          const cam = (document.querySelector("a-scene") as any)?.camera;
+          if (THREE && cam && obj) {
+            obj.updateMatrixWorld(true);
+            const box = new THREE.Box3().setFromObject(obj);
+            if (!box.isEmpty()) {
+              const c = box.getCenter(new THREE.Vector3());
+              const size = box.getSize(new THREE.Vector3());
+              const p = c.clone().project(cam);
+              lines.push(
+                `  実寸=${size.x.toFixed(2)}x${size.y.toFixed(2)}x${size.z.toFixed(2)}` +
+                  ` 画面位置=${(((p.x + 1) / 2) * 100).toFixed(0)}%,${(((1 - p.y) / 2) * 100).toFixed(0)}%` +
+                  ` 奥行=${p.z.toFixed(2)}`
+              );
+            }
+          }
+        } catch {
+          /* 診断用なので失敗しても無視 */
+        }
       }
       lines.push(`body style=${document.body.getAttribute("style") || "(なし)"}`);
 

@@ -30,6 +30,18 @@ function pickWeighted(entries: DrawGroupEntry[]): DrawGroupEntry | null {
 // /sales のデモ作成画面から「サイズを変えて即座に見比べる」ために使う想定で、
 // DBを書き換えないため商談中に安全に試せる。
 // "0.5" のような単一の数値でも、"0.5 0.5 0.5" のような3軸指定でも受け付ける。
+// 管理画面から保存された向き/位置の値を検証する。
+// 空文字や不正な文字列がそのままA-Frameへ渡ると、姿勢が壊れてオブジェクトが
+// 画面外に飛んだり見えなくなったりするため、"x y z" 形式の数値以外は無視する。
+function normalizeVec3(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const parts = raw.trim().split(/[\s,]+/).filter(Boolean);
+  if (parts.length !== 3) return null;
+  const nums = parts.map(Number);
+  if (nums.some((n) => !Number.isFinite(n))) return null;
+  return nums.join(" ");
+}
+
 function normalizeScaleParam(raw: string | string[] | undefined): string | null {
   const value = Array.isArray(raw) ? raw[0] : raw;
   if (!value) return null;
@@ -85,9 +97,9 @@ export default async function ViewerPage({
       // 焦らし演出(結果が出るまでのプレースホルダー)をカテゴリ専用のものにするために使う。
       // カスタムアップロードのオブジェクト(fukubikuの固定カテゴリに属さない)ではnullのまま。
       category = p?.category ?? null;
-      scale = p?.scale ?? null;
-      rotation = p?.rotation ?? null;
-      position = p?.position ?? null;
+      scale = normalizeScaleParam(p?.scale ?? undefined);
+      rotation = normalizeVec3(p?.rotation);
+      position = normalizeVec3(p?.position);
     }
 
     return (
@@ -167,9 +179,9 @@ export default async function ViewerPage({
     const p = preset as PresetObject | null;
     modelUrl = p?.model_url ?? null;
     category = p?.category ?? null;
-    scale = p?.scale ?? null;
-    rotation = p?.rotation ?? null;
-    position = p?.position ?? null;
+    scale = normalizeScaleParam(p?.scale ?? undefined);
+    rotation = normalizeVec3(p?.rotation);
+    position = normalizeVec3(p?.position);
   }
 
   return (
