@@ -103,6 +103,8 @@ export const PARTICIPANT_HEADER = "x-rally-participant";
 export interface RallyPublicState {
   participantId: string;
   restoreCode: string;
+  /** メール登録済みなら伏せ字の宛先。未登録は null。 */
+  email: string | null;
   stamps: { spotId: string; method: AttendStampMethod; createdAt: string }[];
   completed: boolean;
   coupon: { code: string; issuedAt: string; redeemedAt: string | null } | null;

@@ -1,14 +1,14 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import AttendProjectEditor, { type AttendItemWithTriggerCount } from "@/components/AttendProjectEditor";
-import type { AttendItem, AttendProject, AttendRally, AttendTrigger } from "@/lib/types";
+import type { AttendItem, AttendPortal, AttendProject, AttendRally, AttendTrigger } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function AttendProjectPage({ params }: { params: { id: string } }) {
   const supabase = createClient();
 
-  const [{ data: project, error }, { data: items }, { data: rallies }] = await Promise.all([
+  const [{ data: project, error }, { data: items }, { data: rallies }, { data: portals }] = await Promise.all([
     supabase.from("attend_projects").select("*").eq("id", params.id).single(),
     supabase
       .from("attend_items")
@@ -17,6 +17,11 @@ export default async function AttendProjectPage({ params }: { params: { id: stri
       .order("created_at", { ascending: true }),
     supabase
       .from("attend_rallies")
+      .select("*")
+      .eq("project_id", params.id)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("attend_portals")
       .select("*")
       .eq("project_id", params.id)
       .order("created_at", { ascending: true }),
@@ -70,6 +75,7 @@ export default async function AttendProjectPage({ params }: { params: { id: stri
       project={project as AttendProject}
       items={itemsWithCount}
       rallies={rallyList.map((r) => ({ ...r, spot_count: spotCount.get(r.id) ?? 0 }))}
+      portals={(portals as AttendPortal[] | null) ?? []}
     />
   );
 }

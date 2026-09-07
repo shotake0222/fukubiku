@@ -516,6 +516,10 @@ export interface AttendRallyParticipant {
   rally_id: string;
   restore_code: string;
   nickname: string | null;
+  /** 任意のメール登録。Cookieを失っても呼び戻せるようにするための鍵。 */
+  email: string | null;
+  email_verified_at: string | null;
+  display_name: string | null;
   created_at: string;
   last_seen_at: string;
 }
@@ -560,6 +564,72 @@ export interface AttendRallyLink {
   /** 停止するとこのURLだけ開けなくなる（他のURLには影響しない）。 */
   enabled: boolean;
   note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ---- あてんど: 受け皿サイト（ポータル） ----
+export type { PortalTemplate, PortalStatus, PortalBlockKind } from "@/lib/portal/types";
+export { PORTAL_TEMPLATES } from "@/lib/portal/types";
+
+/** DBの1行。表示用に整形したものは lib/portal/types.ts の PortalData。 */
+export interface AttendPortal {
+  id: string;
+  project_id: string;
+  rally_id: string | null;
+  custom_ar_url: string | null;
+  hash: string;
+  name: string;
+  template: string;
+  status: "draft" | "published" | "ended";
+  ended_message: string | null;
+  ended_link_url: string | null;
+  ended_link_label: string | null;
+
+  brand_color: string;
+  brand_color_dark: string;
+  accent_color: string | null;
+  logo_url: string | null;
+  logo_text: string | null;
+
+  site_title: string;
+  site_description: string | null;
+  og_image_url: string | null;
+
+  hero_image_url: string | null;
+  hero_eyebrow: string | null;
+  hero_title: string | null;
+  hero_text: string | null;
+
+  ar_heading: string;
+  ar_text: string | null;
+  ar_button_label: string;
+
+  status_line: string | null;
+
+  owner_name: string | null;
+  owner_address: string | null;
+  privacy_url: string | null;
+  terms_url: string | null;
+  contact_url: string | null;
+  copyright_text: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AttendPortalBlock {
+  id: string;
+  portal_id: string;
+  kind: string;
+  sort_order: number;
+  title: string | null;
+  body: string | null;
+  meta: string | null;
+  image_url: string | null;
+  link_url: string | null;
+  badge: string | null;
+  enabled: boolean;
   created_at: string;
   updated_at: string;
 }

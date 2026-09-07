@@ -7,8 +7,10 @@ import { createClient } from "@/lib/supabase/client";
 import { generateHash } from "@/lib/hash";
 import AttendProjectForm, { type AttendProjectFormValue } from "@/components/AttendProjectForm";
 import { createDefaultRally } from "@/lib/rallyDefaults";
+import { createDefaultPortal } from "@/lib/portalDefaults";
+import { PORTAL_TEMPLATES, type PortalTemplate } from "@/lib/portal/types";
 import { attendDisplayTypeShort } from "@/lib/types";
-import type { AttendItem, AttendProject, AttendProjectStatus, AttendRally } from "@/lib/types";
+import type { AttendItem, AttendPortal, AttendProject, AttendProjectStatus, AttendRally } from "@/lib/types";
 
 const itemStatusLabel: Record<string, string> = {
   draft: "下書き",
@@ -46,14 +48,22 @@ const rallyStatusLabel: Record<string, string> = {
   archived: "アーカイブ",
 };
 
+const portalStatusLabel: Record<string, string> = {
+  draft: "下書き",
+  published: "公開中",
+  ended: "提供終了",
+};
+
 export default function AttendProjectEditor({
   project,
   items,
   rallies,
+  portals,
 }: {
   project: AttendProject;
   items: AttendItemWithTriggerCount[];
   rallies: AttendRallyWithSpotCount[];
+  portals: AttendPortal[];
 }) {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
@@ -74,6 +84,8 @@ export default function AttendProjectEditor({
   const [saving, setSaving] = useState(false);
   const [addingItem, setAddingItem] = useState(false);
   const [addingRally, setAddingRally] = useState(false);
+  const [addingPortal, setAddingPortal] = useState(false);
+  const [portalTemplate, setPortalTemplate] = useState<PortalTemplate>("kanko");
   const [error, setError] = useState<string | null>(null);
 
   const siteOrigin = process.env.NEXT_PUBLIC_ATTEND_SITE_URL || "https://app.attend-ar.com";
@@ -117,6 +129,24 @@ export default function AttendProjectEditor({
       return;
     }
     router.push(`/admin/attend/rallies/${created.id}`);
+  }
+
+  async function handleAddPortal() {
+    setAddingPortal(true);
+    setError(null);
+    const created = await createDefaultPortal(
+      supabase,
+      project.id,
+      project.client_name,
+      portalTemplate,
+      rallies[0]?.id ?? null
+    );
+    setAddingPortal(false);
+    if (!created) {
+      setError("受け皿サイトの作成に失敗しました");
+      return;
+    }
+    router.push(`/admin/attend/portals/${created.id}`);
   }
 
   async function handleAddItem() {
@@ -256,6 +286,80 @@ export default function AttendProjectEditor({
         {rallies.length === 0 && (
           <p className="text-sm text-slate-400 py-6 text-center">
             まだラリーがありません。「+ ラリーを作成」で3スポットの雛形ができます。
+          </p>
+        )}
+      </section>
+
+      <section className="bg-white rounded-xl shadow p-6 space-y-4">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">受け皿サイト</h2>
+            <p className="text-xs text-slate-500 mt-1">
+              スタンプラリーの入口になる1枚もののサイトです。用途別のテンプレートを選んで、
+              画像・バナー・リンクを差し替えるだけで公開できます。
+              こちらでホスティングするので、公開後の修正も提供終了もこの管理画面から行えます。
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 shrink-0">
+            <select
+              value={portalTemplate}
+              onChange={(e) => setPortalTemplate(e.target.value as PortalTemplate)}
+              className="text-xs border rounded-lg px-2 py-1.5"
+            >
+              {PORTAL_TEMPLATES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={handleAddPortal}
+              disabled={addingPortal}
+              className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
+            >
+              {addingPortal ? "作成中..." : "+ サイトを作成"}
+            </button>
+          </div>
+        </div>
+
+        <ul className="divide-y">
+          {portals.map((p) => (
+            <li key={p.id} className="py-3 flex items-center gap-3">
+              <div className="min-w-0 flex-1">
+                <Link
+                  href={`/admin/attend/portals/${p.id}`}
+                  className="font-medium text-blue-600 hover:underline"
+                >
+                  {p.name}
+                </Link>
+                <p className="text-xs text-slate-500">
+                  {PORTAL_TEMPLATES.find((t) => t.value === p.template)?.label ?? p.template}
+                </p>
+                <code className="text-[11px] text-slate-400 break-all">{`${siteOrigin}/p/${p.hash}`}</code>
+              </div>
+              <span
+                className={`px-2 py-0.5 rounded-full text-[11px] shrink-0 ${
+                  p.status === "published"
+                    ? "bg-emerald-100 text-emerald-700"
+                    : p.status === "ended"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-slate-100 text-slate-600"
+                }`}
+              >
+                {portalStatusLabel[p.status] ?? p.status}
+              </span>
+              <Link
+                href={`/admin/attend/portals/${p.id}`}
+                className="text-sm text-blue-600 hover:underline shrink-0"
+              >
+                編集
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {portals.length === 0 && (
+          <p className="text-sm text-slate-400 py-6 text-center">
+            まだありません。テンプレートを選んで「+ サイトを作成」を押すと、雛形ができます。
           </p>
         )}
       </section>

@@ -55,6 +55,8 @@ interface StampState {
 interface RallyState {
   participantId: string;
   restoreCode: string;
+  /** メール登録済みなら伏せ字の宛先（a***@example.com）。未登録は null。 */
+  email: string | null;
   stamps: StampState[];
   completed: boolean;
   coupon: { code: string; issuedAt: string; redeemedAt: string | null } | null;
@@ -96,6 +98,14 @@ export default function RallyApp({
   const [showRestore, setShowRestore] = useState(false);
   const [codeInput, setCodeInput] = useState("");
   const [restoreInput, setRestoreInput] = useState("");
+
+  // メールでスタンプ帳を保存する（=会員登録）ための状態。
+  // 「登録」と「別端末からの呼び戻し」は同じ操作にしてある。
+  const [showEmail, setShowEmail] = useState(false);
+  const [emailStep, setEmailStep] = useState<"input" | "code">("input");
+  const [emailInput, setEmailInput] = useState("");
+  const [emailCodeInput, setEmailCodeInput] = useState("");
+  const [devCode, setDevCode] = useState<string | null>(null);
 
   const [pos, setPos] = useState<GeolocationPosition | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
@@ -307,6 +317,49 @@ export default function RallyApp({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, pos, stampedIds, rally.active]);
 
+  async function requestEmailCode() {
+    setBusy(true);
+    const { ok, status, data } = await post("email/request", { email: emailInput });
+    setBusy(false);
+    if (!ok) {
+      const map: Record<string, string> = {
+        invalid_email: "メールアドレスの形式をご確認ください",
+        too_many_requests: "送信が続いています。しばらく待ってからお試しください",
+        mail_not_configured: "ただいまメールを送信できません。運営にお問い合わせください",
+      };
+      setMessage(map[data?.error] ?? "確認コードを送信できませんでした");
+      return;
+    }
+    // 開発環境でのみ返る値。本番では常に null。
+    setDevCode(data?.devCode ?? null);
+    setEmailStep("code");
+    setMessage("確認コードを送信しました");
+  }
+
+  async function verifyEmailCode() {
+    setBusy(true);
+    const { ok, data } = await post("email/verify", { email: emailInput, code: emailCodeInput });
+    setBusy(false);
+    if (!ok) {
+      const map: Record<string, string> = {
+        code_mismatch: "コードが違います",
+        code_expired: "コードの有効期限が切れました。もう一度送信してください",
+        code_not_found: "コードが見つかりません。もう一度送信してください",
+        too_many_attempts: "入力回数の上限に達しました。もう一度送信してください",
+      };
+      setMessage(map[data?.error] ?? "確認できませんでした");
+      return;
+    }
+    setState(data as RallyState);
+    setShowEmail(false);
+    setEmailStep("input");
+    setEmailCodeInput("");
+    setDevCode(null);
+    setMessage(
+      data?.merged ? "スタンプ帳を引き継ぎました" : "このスタンプ帳をメールに保存しました"
+    );
+  }
+
   async function handleRestore() {
     setBusy(true);
     const { ok, data } = await post("restore", { code: restoreInput });
@@ -461,6 +514,22 @@ export default function RallyApp({
           </div>
         </section>
 
+        {/* 1つでも押していて、まだメールに保存していない人にだけ出す。
+            Cookieを失うと取り出せなくなるので、失う前に案内する。 */}
+        {state && !state.email && stampCount > 0 && (
+          <button
+            onClick={() => setShowEmail(true)}
+            className="mt-4 w-full px-4 py-3 text-left text-xs leading-relaxed"
+            style={{ background: t.panel, border: `1px solid ${t.line}`, borderRadius: t.radius, color: t.sub }}
+          >
+            <span className="font-bold" style={{ color: t.ink }}>
+              スタンプ帳をメールに保存しませんか？
+            </span>
+            <br />
+            機種変更やブラウザの履歴削除でこの端末の記録が消えても、メールで呼び戻せます。
+          </button>
+        )}
+
         {state?.completed && (
           <button
             onClick={() => setScreen("complete")}
@@ -563,8 +632,11 @@ export default function RallyApp({
           <button onClick={() => setShowCodeInput(true)} className="underline underline-offset-4">
             合言葉を入力
           </button>
+          <button onClick={() => setShowEmail(true)} className="underline underline-offset-4">
+            {state?.email ? "保存先のメールを変える" : "メールに保存する"}
+          </button>
           <button onClick={() => setShowRestore(true)} className="underline underline-offset-4">
-            機種変更の引き継ぎ
+            引き継ぎコードで復元
           </button>
           {isEmbed && (
             // 埋め込み先のiframeにカメラや位置情報の権限が付いていない場合の逃げ道。
@@ -580,9 +652,14 @@ export default function RallyApp({
           )}
         </div>
 
-        {state?.restoreCode && (
+        {state?.email && (
           <p className="mt-3 text-center text-[11px]" style={{ color: t.sub }}>
-            あなたの引き継ぎコード: <span className="font-mono tracking-widest">{state.restoreCode}</span>
+            <span className="font-mono">{state.email}</span> に保存済み
+          </p>
+        )}
+        {state?.restoreCode && (
+          <p className="mt-1 text-center text-[11px]" style={{ color: t.sub }}>
+            引き継ぎコード: <span className="font-mono tracking-widest">{state.restoreCode}</span>
           </p>
         )}
       </div>
@@ -623,6 +700,87 @@ export default function RallyApp({
           >
             {busy ? "確認中..." : "スタンプを押す"}
           </button>
+        </Sheet>
+      )}
+
+      {showEmail && (
+        <Sheet
+          theme={t}
+          title={emailStep === "input" ? "メールにスタンプ帳を保存" : "確認コードを入力"}
+          onClose={() => {
+            setShowEmail(false);
+            setEmailStep("input");
+            setDevCode(null);
+          }}
+        >
+          {emailStep === "input" ? (
+            <>
+              <p className="text-xs leading-relaxed" style={{ color: t.sub }}>
+                メールアドレスを登録しておくと、機種変更やブラウザの履歴削除でこの端末の記録が
+                消えても、同じメールでスタンプ帳を呼び戻せます。
+                すでに登録済みのメールを入れた場合は、そのスタンプ帳に切り替わります
+                （この端末で押した分も引き継がれます）。
+              </p>
+              <input
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                type="email"
+                inputMode="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="mt-4 w-full rounded-xl px-4 py-3 text-center text-base"
+                style={{ background: t.bg, color: t.ink, border: `1px solid ${t.line}` }}
+              />
+              <button
+                disabled={busy || !emailInput.trim()}
+                onClick={requestEmailCode}
+                className="mt-4 w-full rounded-xl py-3.5 text-sm font-bold disabled:opacity-40"
+                style={{ background: t.accent, color: t.onAccent }}
+              >
+                {busy ? "送信中..." : "確認コードを送る"}
+              </button>
+              <p className="mt-3 text-[11px] leading-relaxed" style={{ color: t.sub }}>
+                パスワードはありません。ご登録のメールは、スタンプ帳の呼び戻しにのみ使用します。
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs leading-relaxed" style={{ color: t.sub }}>
+                <span className="font-mono">{emailInput}</span> 宛に6桁の確認コードを送りました。
+                10分以内に入力してください。
+              </p>
+              {devCode && (
+                <p className="mt-2 text-[11px]" style={{ color: t.accent }}>
+                  （開発環境のため画面に表示しています：{devCode}）
+                </p>
+              )}
+              <input
+                value={emailCodeInput}
+                onChange={(e) => setEmailCodeInput(e.target.value.replace(/\D/g, ""))}
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                placeholder="000000"
+                className="mt-4 w-full rounded-xl px-4 py-3 text-center font-mono text-2xl tracking-[0.4em]"
+                style={{ background: t.bg, color: t.ink, border: `1px solid ${t.line}` }}
+              />
+              <button
+                disabled={busy || emailCodeInput.length !== 6}
+                onClick={verifyEmailCode}
+                className="mt-4 w-full rounded-xl py-3.5 text-sm font-bold disabled:opacity-40"
+                style={{ background: t.accent, color: t.onAccent }}
+              >
+                {busy ? "確認中..." : "確認する"}
+              </button>
+              <button
+                onClick={() => setEmailStep("input")}
+                className="mt-3 w-full text-xs underline underline-offset-4"
+                style={{ color: t.sub }}
+              >
+                メールアドレスを入力し直す
+              </button>
+            </>
+          )}
         </Sheet>
       )}
 

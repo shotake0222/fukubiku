@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { maskEmail } from "@/lib/rallyEmailAuth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   PARTICIPANT_HEADER,
@@ -215,6 +216,8 @@ export async function buildState(
   return {
     participantId: participant.id,
     restoreCode: participant.restore_code,
+    // 本文は返さない。登録済みかどうかと、どの宛先かの目印だけ。
+    email: participant.email ? maskEmail(participant.email) : null,
     stamps: stamps.map((s) => ({ spotId: s.spot_id, method: s.method, createdAt: s.created_at })),
     completed: isCompleted(ctx, stamps.length),
     coupon: reward
