@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ▼差し替え -->
+<title>『○○○○』×○○市 聖地巡礼ARラリー</title>
+<meta name="description" content="作品の舞台をめぐる聖地巡礼ARスタンプラリー。現地でキャラクターが現れます。">
+<style>
+/* =======================================================
+   あてんど 受け皿サイト テンプレート 04：IPコラボ・聖地巡礼
+   アニメ・ゲーム・ドラマのロケ地／作品コラボ企画向け
+   -------------------------------------------------------
+   暗色で作品世界を立たせ、キービジュアルを主役にした構成。
+   権利表記とマナー喚起の枠を最初から入れてあります。
+   ======================================================= */
+:root{
+  --brand:#ff4d6d;        /* ▼差し替え：作品のイメージカラー */
+  --brand-2:#5eead4;      /* ▼差し替え：差し色 */
+  --ink:#f2f5ff;
+  --sub:#9aa6c4;
+  --bg:#0b0f1a;
+  --panel:#131a2b;
+  --line:#243049;
+  --radius:14px;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;-webkit-text-size-adjust:100%}
+img{max-width:100%;display:block}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+.ph{background:linear-gradient(135deg,#1b2338,#2a3550);display:flex;align-items:center;justify-content:center;color:#5b6b8c;font-size:12px}
+
+/* ---- ヘッダー ---- */
+header{position:sticky;top:0;z-index:30;background:rgba(11,15,26,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.headbar{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.logo{text-decoration:none;color:var(--ink);font-weight:800;font-size:14px;letter-spacing:.02em}
+.headbar .go{margin-left:auto;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;
+  font-size:13px;padding:10px 20px;border-radius:999px;white-space:nowrap;box-shadow:0 0 18px rgba(255,77,109,.4)}
+
+/* ---- キービジュアル ---- */
+.kv{position:relative;min-height:520px;display:flex;align-items:center;overflow:hidden;
+  background:radial-gradient(90% 60% at 50% 0%,rgba(255,77,109,.22),transparent 62%),linear-gradient(160deg,#131a2b,#0b0f1a)}
+.kv .ph{position:absolute;inset:0;opacity:.35}
+.kv .inner{position:relative;max-width:1000px;margin:0 auto;padding:60px 20px;width:100%;text-align:center}
+.kv .credit{font-size:11px;letter-spacing:.28em;color:var(--brand-2);font-weight:800;margin:0 0 18px}
+.kv h1{font-size:46px;line-height:1.25;margin:0 0 18px;font-weight:900;
+  text-shadow:0 0 30px rgba(255,77,109,.35)}
+.kv p{margin:0 auto 30px;font-size:15px;color:var(--sub);max-width:34em}
+.kv .btn{display:inline-block;background:var(--brand);color:#fff;text-decoration:none;font-weight:900;
+  padding:18px 44px;border-radius:999px;font-size:17px;box-shadow:0 0 34px rgba(255,77,109,.5);transition:.25s}
+.kv .btn:hover{transform:translateY(-2px);box-shadow:0 0 44px rgba(255,77,109,.7)}
+@media(max-width:700px){.kv{min-height:440px}.kv h1{font-size:30px}.kv .btn{display:block;padding:18px 20px}}
+
+/* ---- 見出し ---- */
+.sec{padding:64px 0}
+.sec-head{text-align:center;margin-bottom:36px}
+.sec-head span{display:inline-block;font-size:11px;letter-spacing:.3em;color:var(--brand-2);font-weight:800;margin-bottom:8px}
+.sec-head h2{margin:0;font-size:27px;font-weight:900}
+
+/* ---- AR導線（帯） ---- */
+.ar{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel);padding:44px 0}
+.ar .inner{max-width:1000px;margin:0 auto;padding:0 20px;display:grid;grid-template-columns:1fr auto;gap:28px;align-items:center}
+.ar h2{margin:0 0 8px;font-size:23px;font-weight:900}
+.ar p{margin:0;font-size:14px;color:var(--sub)}
+.ar .btn{background:var(--brand);color:#fff;text-decoration:none;font-weight:900;padding:17px 38px;
+  border-radius:999px;font-size:16px;white-space:nowrap;box-shadow:0 0 28px rgba(255,77,109,.45)}
+@media(max-width:700px){.ar .inner{grid-template-columns:1fr;text-align:center}.ar .btn{text-align:center}}
+
+/* ---- キャラクター ---- */
+.chars{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.char{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;text-align:center}
+.char .ph{height:170px}
+.char .body{padding:16px 12px}
+.char h3{margin:0 0 4px;font-size:15px;font-weight:800}
+.char p{margin:0;font-size:12px;color:var(--sub)}
+@media(max-width:860px){.chars{grid-template-columns:repeat(2,1fr)}}
+
+/* ---- ロケ地 ---- */
+.locs{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.loc{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;position:relative}
+.loc .ph{height:180px}
+.loc .body{padding:20px}
+.loc .no{position:absolute;top:12px;left:12px;background:var(--brand);color:#fff;font-size:12px;font-weight:900;
+  padding:5px 13px;border-radius:999px}
+.loc h3{margin:0 0 6px;font-size:17px;font-weight:800}
+.loc .ep{display:inline-block;background:rgba(94,234,212,.12);color:var(--brand-2);font-size:11px;font-weight:800;
+  padding:3px 10px;border-radius:5px;margin-bottom:10px}
+.loc p{margin:0;font-size:13.5px;color:var(--sub);line-height:1.75}
+.loc .meta{margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--sub)}
+@media(max-width:700px){.locs{grid-template-columns:1fr}}
+
+/* ---- バナー枠 ---- */
+.banners{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.banner{display:block;text-decoration:none;color:var(--ink);background:var(--panel);border:1px solid var(--line);
+  border-radius:var(--radius);overflow:hidden;transition:.25s}
+.banner:hover{border-color:var(--brand);transform:translateY(-3px)}
+.banner .ph{height:100px}
+.banner .cap{padding:14px 16px;font-size:13.5px;font-weight:700}
+.banner .cap small{display:block;font-weight:400;color:var(--sub);font-size:12px;margin-top:3px}
+@media(max-width:760px){.banners{grid-template-columns:1fr}}
+
+/* ---- マナー ---- */
+.manner{background:rgba(255,77,109,.07);border:1px solid rgba(255,77,109,.3);border-radius:var(--radius);padding:24px}
+.manner h3{margin:0 0 10px;font-size:16px;color:var(--brand);font-weight:800}
+.manner ul{margin:0;padding-left:1.2em;font-size:13.5px;color:var(--sub)}
+.manner li{margin-bottom:6px}
+
+/* ---- フッター ---- */
+footer{background:#070a12;color:var(--sub);padding:40px 0 90px;font-size:12.5px;border-top:1px solid var(--line)}
+footer a{color:var(--sub)}
+footer .links{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}
+footer .cr{margin-top:22px;font-size:11.5px;color:#61708f}
+
+/* ---- スマホ固定のAR導線 ---- */
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:40;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(11,15,26,.95);border-top:1px solid var(--line);display:none}
+.sticky a{display:block;background:var(--brand);color:#fff;text-align:center;text-decoration:none;
+  font-weight:900;padding:15px;border-radius:999px;font-size:15px}
+@media(max-width:760px){.sticky{display:block}footer{padding-bottom:110px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headbar">
+    <!-- ▼差し替え：作品名×自治体名 -->
+    <a class="logo" href="#">『○○○○』× ○○市 聖地巡礼ARラリー</a>
+    <!-- ▼差し替え必須：スタンプラリーURL -->
+    <a class="go" href="https://app.attend-ar.com/r/XXXXXXXXXX">参加する</a>
+  </div>
+</header>
+
+<!-- ▼差し替え：キービジュアル。.kv 内の .ph を <img src="kv.jpg" alt=""> に置き換え -->
+<section class="kv">
+  <div class="ph">キービジュアル 1920×1080</div>
+  <div class="inner">
+    <p class="credit">S E I C H I &nbsp; A R &nbsp; R A L L Y</p>
+    <h1>あの場所に立つと、<br>あのシーンが動き出す。</h1>
+    <p>作品の舞台となった10ヶ所をめぐるARスタンプラリー。現地でスマホをかざすと、等身大のキャラクターが現れます。</p>
+    <a class="btn" href="https://app.attend-ar.com/r/XXXXXXXXXX">巡礼を始める</a>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>CHARACTERS</span><h2>登場キャラクター</h2></div>
+    <div class="chars">
+      <!-- ▼差し替え：キャラクター。数は増減して構いません -->
+      <article class="char"><div class="ph">立ち絵 600×800</div><div class="body"><h3>キャラクターA</h3><p>CV：○○ ○○</p></div></article>
+      <article class="char"><div class="ph">立ち絵 600×800</div><div class="body"><h3>キャラクターB</h3><p>CV：○○ ○○</p></div></article>
+      <article class="char"><div class="ph">立ち絵 600×800</div><div class="body"><h3>キャラクターC</h3><p>CV：○○ ○○</p></div></article>
+      <article class="char"><div class="ph">立ち絵 600×800</div><div class="body"><h3>キャラクターD</h3><p>CV：○○ ○○</p></div></article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================
+     ▼▼▼ ここは必ず残してください（このサイトの目的） ▼▼▼
+     href をあてんどが発行したスタンプラリーURLに差し替えます。
+     ============================================================ -->
+<section class="ar">
+  <div class="inner">
+    <div>
+      <h2>アプリのインストールは不要です</h2>
+      <p>URLを開くだけで始まります。機種変更しても、引き継ぎコードでスタンプ帳を持ち越せます。</p>
+    </div>
+    <a class="btn" href="https://app.attend-ar.com/r/XXXXXXXXXX">巡礼を始める →</a>
+  </div>
+</section>
+<!-- ▲▲▲ ここまで ▲▲▲ -->
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>LOCATIONS</span><h2>巡礼スポット</h2></div>
+    <div class="locs">
+      <!-- ▼差し替え：ロケ地。話数タグ（.ep）は不要なら削除してください -->
+      <article class="loc"><span class="no">SPOT 01</span><div class="ph">ロケ地写真 1200×720</div>
+        <div class="body"><span class="ep">第1話</span><h3>○○駅 西口</h3>
+          <p>物語がはじまる場所。改札前に立つと、あの日の朝の会話が再生されます。</p>
+          <div class="meta">終日／改札外・自由に立ち入れます</div></div></article>
+      <article class="loc"><span class="no">SPOT 02</span><div class="ph">ロケ地写真 1200×720</div>
+        <div class="body"><span class="ep">第4話</span><h3>○○神社 石段</h3>
+          <p>夏祭りの回。石段の中腹にARスポットがあります。</p>
+          <div class="meta">6:00–18:00／参拝自由</div></div></article>
+      <article class="loc"><span class="no">SPOT 03</span><div class="ph">ロケ地写真 1200×720</div>
+        <div class="body"><span class="ep">第7話</span><h3>○○海岸 堤防</h3>
+          <p>夕暮れの告白シーン。日没前後がいちばん再現度が高い時間帯です。</p>
+          <div class="meta">終日／足元にご注意ください</div></div></article>
+      <article class="loc"><span class="no">SPOT 04</span><div class="ph">ロケ地写真 1200×720</div>
+        <div class="body"><span class="ep">最終話</span><h3>○○高校 前</h3>
+          <p>校門前の歩道からご覧ください。敷地内には立ち入れません。</p>
+          <div class="meta">終日／校内立入禁止</div></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>INFORMATION</span><h2>関連情報</h2></div>
+    <div class="banners">
+      <!-- ▼差し替え：バナーは自由に -->
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">コラボグッズ販売<small>○○市観光案内所ほか</small></div></a>
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">巡礼マップ（PDF）<small>印刷してお持ちいただけます</small></div></a>
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">公式X（旧Twitter）<small>最新情報はこちら</small></div></a>
+    </div>
+
+    <div style="margin-top:30px">
+      <div class="manner">
+        <h3>巡礼にあたってのお願い</h3>
+        <ul>
+          <!-- ▼差し替え：現地の状況に合わせて調整してください -->
+          <li>スポットの多くは住民の生活圏です。私有地への立ち入り、大声での会話はご遠慮ください。</li>
+          <li>撮影の際は、通行の妨げにならない場所からお願いします。人物が写り込まないようご配慮ください。</li>
+          <li>歩きながらの操作はおやめください。立ち止まってご利用ください。</li>
+          <li>ゴミはお持ち帰りください。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <!-- ▼差し替え：主催・共催 -->
+    <strong>主催：○○市観光協会／協力：○○製作委員会</strong>
+    <div class="links">
+      <a href="#">プライバシーポリシー</a>
+      <a href="#">利用規約</a>
+      <a href="#">お問い合わせ</a>
+    </div>
+    <!-- ▼差し替え必須：権利表記。IP案件では必ず権利元の指定どおりに記載してください -->
+    <p class="cr">© ○○○○／○○製作委員会<br>本サイトに掲載の画像・文章の無断転載を禁じます。</p>
+    <p class="cr">Powered by あてんど.</p>
+  </div>
+</footer>
+
+<!-- ▼スマホで常に出るAR導線。href は上と同じURLに揃えてください -->
+<div class="sticky"><a href="https://app.attend-ar.com/r/XXXXXXXXXX">巡礼を始める</a></div>
+
+</body>
+</html>

@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ▼差し替え -->
+<title>○○ミュージアム｜館内ARスタンプラリー</title>
+<meta name="description" content="館内をめぐってスタンプを集める、○○ミュージアムのARスタンプラリー。">
+<style>
+/* =======================================================
+   あてんど 受け皿サイト テンプレート 03：施設・館内
+   博物館・水族館・商業施設・展示会向け
+   -------------------------------------------------------
+   来館者は「もう館内にいる」のが前提。
+   開館時間・フロア・所要時間といった実用情報を先に出し、
+   参加導線をヘッダーに常駐させる構成です。
+   ======================================================= */
+:root{
+  --brand:#1b4a7a;        /* ▼差し替え：主役の色 */
+  --brand-dark:#123456;
+  --accent:#0ea5b7;
+  --ink:#14243f;
+  --sub:#6b7c96;
+  --bg:#ffffff;
+  --panel:#f2f6fa;
+  --line:#dbe4ee;
+  --radius:12px;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;-webkit-text-size-adjust:100%}
+img{max-width:100%;display:block}
+.wrap{max-width:1000px;margin:0 auto;padding:0 20px}
+.ph{background:linear-gradient(135deg,#e4ecf4,#cfdcea);display:flex;align-items:center;justify-content:center;color:#94a7bd;font-size:12px}
+
+/* ---- ヘッダー：参加ボタン常駐 ---- */
+header{position:sticky;top:0;z-index:30;background:#fff;border-bottom:1px solid var(--line)}
+.headbar{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:15px}
+.logo .mark{width:32px;height:32px;border-radius:8px;background:var(--brand);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px}
+.headbar .go{margin-left:auto;background:var(--brand);color:#fff;text-decoration:none;font-weight:800;
+  font-size:13px;padding:10px 20px;border-radius:8px;white-space:nowrap}
+@media(max-width:520px){.headbar .go{padding:9px 14px;font-size:12px}}
+
+/* ---- 開館ステータス ---- */
+.status{background:var(--panel);border-bottom:1px solid var(--line);font-size:13px}
+.status .inner{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;gap:22px;flex-wrap:wrap;align-items:center}
+.status .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#2f9e44;margin-right:7px}
+.status b{color:var(--brand)}
+
+/* ---- ヒーロー ---- */
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:0;align-items:stretch}
+.hero .txt{padding:64px 20px 64px 0;max-width:520px;margin-left:auto}
+.hero .eyebrow{font-size:11px;letter-spacing:.3em;color:var(--accent);font-weight:800;margin:0 0 14px}
+.hero h1{font-size:38px;line-height:1.3;margin:0 0 16px;font-weight:800}
+.hero p{margin:0 0 26px;font-size:15px;color:var(--sub)}
+.hero .ph{min-height:100%}
+@media(max-width:860px){.hero{grid-template-columns:1fr}.hero .txt{padding:44px 20px;max-width:none;margin:0}
+  .hero .ph{min-height:220px}.hero h1{font-size:28px}}
+
+/* ---- AR導線 ---- */
+.ar{background:var(--brand);color:#fff;padding:40px 0}
+.ar .inner{max-width:1000px;margin:0 auto;padding:0 20px;display:grid;grid-template-columns:1fr auto;gap:26px;align-items:center}
+.ar h2{margin:0 0 8px;font-size:23px;font-weight:800}
+.ar p{margin:0;font-size:14px;opacity:.88}
+.ar .btn{background:#fff;color:var(--brand-dark);text-decoration:none;font-weight:800;padding:17px 36px;
+  border-radius:10px;font-size:16px;white-space:nowrap;transition:.25s}
+.ar .btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.2)}
+@media(max-width:700px){.ar .inner{grid-template-columns:1fr;text-align:center}.ar .btn{text-align:center}}
+
+/* ---- 遊び方 3ステップ ---- */
+.sec{padding:56px 0}
+.sec-head{margin-bottom:30px}
+.sec-head span{display:block;font-size:11px;letter-spacing:.3em;color:var(--accent);font-weight:800;margin-bottom:6px}
+.sec-head h2{margin:0;font-size:25px;font-weight:800}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;counter-reset:s}
+.step{background:var(--panel);border-radius:var(--radius);padding:26px 22px;position:relative}
+.step::before{counter-increment:s;content:"0" counter(s);position:absolute;top:14px;right:18px;
+  font-size:32px;font-weight:900;color:#d3e0ec}
+.step h3{margin:0 0 8px;font-size:16px;font-weight:800}
+.step p{margin:0;font-size:13.5px;color:var(--sub);line-height:1.75}
+@media(max-width:760px){.steps{grid-template-columns:1fr}}
+
+/* ---- フロア別スポット ---- */
+.floor{border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;margin-bottom:16px}
+.floor-head{background:var(--brand);color:#fff;padding:13px 20px;font-weight:800;font-size:15px;display:flex;gap:12px;align-items:center}
+.floor-head .n{background:rgba(255,255,255,.2);padding:2px 10px;border-radius:5px;font-size:12px}
+.floor ul{margin:0;padding:0;list-style:none}
+.floor li{display:flex;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line);align-items:center}
+.floor li:last-child{border-bottom:none}
+.floor li .no{width:26px;height:26px;border-radius:6px;background:var(--panel);color:var(--brand);
+  font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.floor li .t{flex:1;min-width:0}
+.floor li h4{margin:0;font-size:14.5px;font-weight:700}
+.floor li p{margin:0;font-size:12.5px;color:var(--sub)}
+
+/* ---- イベント表 ---- */
+.schedule{width:100%;border-collapse:collapse;font-size:14px}
+.schedule th,.schedule td{padding:14px 16px;border-bottom:1px solid var(--line);text-align:left}
+.schedule th{width:150px;color:var(--brand);font-weight:800;white-space:nowrap}
+@media(max-width:560px){.schedule th,.schedule td{display:block;width:auto;padding:8px 0}
+  .schedule th{border-bottom:none;padding-top:14px}}
+
+/* ---- バナー枠 ---- */
+.banners{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.banner{display:block;text-decoration:none;color:inherit;border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;transition:.25s}
+.banner:hover{box-shadow:0 10px 24px rgba(20,36,63,.1);transform:translateY(-3px)}
+.banner .ph{height:84px}
+.banner .cap{padding:12px 14px;font-size:13px;font-weight:700}
+@media(max-width:860px){.banners{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.banners{grid-template-columns:1fr}}
+
+/* ---- 注意書き ---- */
+.notice{background:#fff8e6;border:1px solid #f2dfa8;border-radius:var(--radius);padding:20px 22px;font-size:13.5px;color:#6b5518}
+.notice h3{margin:0 0 8px;font-size:15px;color:#8a6d1f}
+.notice ul{margin:0;padding-left:1.2em}
+
+/* ---- フッター ---- */
+footer{background:#0f1c2e;color:#c6d2e2;padding:40px 0 90px;font-size:13px}
+footer a{color:#c6d2e2}
+footer .links{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px}
+footer small{display:block;margin-top:22px;color:#7b8ba3}
+
+/* ---- スマホ固定のAR導線 ---- */
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:40;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.96);border-top:1px solid var(--line);display:none}
+.sticky a{display:block;background:var(--brand);color:#fff;text-align:center;text-decoration:none;
+  font-weight:800;padding:15px;border-radius:10px;font-size:15px}
+@media(max-width:760px){.sticky{display:block}footer{padding-bottom:110px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headbar">
+    <!-- ▼差し替え：施設名・ロゴ -->
+    <a class="logo" href="#"><span class="mark">M</span>○○ミュージアム</a>
+    <!-- ▼差し替え必須：スタンプラリーURL -->
+    <a class="go" href="https://app.attend-ar.com/r/XXXXXXXXXX">ラリーに参加</a>
+  </div>
+</header>
+
+<div class="status">
+  <div class="inner">
+    <!-- ▼差し替え：開館状況。手動更新でも十分機能します -->
+    <span><span class="dot"></span><b>開館中</b> 9:30–17:00（最終入館 16:30）</span>
+    <span>休館日：月曜</span>
+    <span>ラリー所要：<b>約40分</b></span>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="txt">
+    <p class="eyebrow">A R &nbsp; S T A M P &nbsp; R A L L Y</p>
+    <h1>展示の前に立つと、<br>もうひとつの展示が現れる。</h1>
+    <p>館内8ヶ所をめぐるARスタンプラリー。展示品の隣に、当時の姿や解説が立ち上がります。すべて集めると記念カードが受け取れます。</p>
+  </div>
+  <!-- ▼差し替え：館内写真。<img src="..." alt=""> に置き換え -->
+  <div class="ph">館内写真 1200×900</div>
+</section>
+
+<!-- ============================================================
+     ▼▼▼ ここは必ず残してください（このサイトの目的） ▼▼▼
+     href をあてんどが発行したスタンプラリーURLに差し替えます。
+     ============================================================ -->
+<section class="ar">
+  <div class="inner">
+    <div>
+      <h2>いますぐ参加できます</h2>
+      <p>アプリのインストールは不要です。館内Wi-Fiに接続してからのご参加をおすすめします。</p>
+    </div>
+    <a class="btn" href="https://app.attend-ar.com/r/XXXXXXXXXX">ラリーを始める →</a>
+  </div>
+</section>
+<!-- ▲▲▲ ここまで ▲▲▲ -->
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>HOW TO PLAY</span><h2>遊び方</h2></div>
+    <div class="steps">
+      <!-- ▼差し替え：現場の運用に合わせて文言を調整してください -->
+      <article class="step"><h3>参加する</h3><p>上のボタンからスタンプ帳を開きます。登録や入力は一切ありません。</p></article>
+      <article class="step"><h3>展示にかざす</h3><p>各展示の脇にあるスタンプ台にスマホをかざすと、ARが現れてスタンプが押されます。</p></article>
+      <article class="step"><h3>受け取る</h3><p>8個集めると記念カードと引換コードが出ます。1階ミュージアムショップでご提示ください。</p></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec" style="background:var(--panel)">
+  <div class="wrap">
+    <div class="sec-head"><span>SPOTS</span><h2>フロア別スポット</h2></div>
+    <!-- ▼差し替え：フロアとスポット。フロアの数は増減して構いません -->
+    <div class="floor">
+      <div class="floor-head"><span class="n">1F</span>常設展示室</div>
+      <ul>
+        <li><span class="no">1</span><div class="t"><h4>エントランス／街のジオラマ</h4><p>受付を入ってすぐ。ここから始めるのがおすすめです。</p></div></li>
+        <li><span class="no">2</span><div class="t"><h4>暮らしの道具</h4><p>展示ケース手前のスタンプ台にかざしてください。</p></div></li>
+        <li><span class="no">3</span><div class="t"><h4>まちの移り変わり</h4><p>年表パネルの右下にタグがあります。</p></div></li>
+      </ul>
+    </div>
+    <div class="floor">
+      <div class="floor-head"><span class="n">2F</span>企画展示室</div>
+      <ul>
+        <li><span class="no">4</span><div class="t"><h4>企画展 入口</h4><p>会期中のみ有効なスポットです。</p></div></li>
+        <li><span class="no">5</span><div class="t"><h4>体験コーナー</h4><p>混雑時はスタッフの案内に従ってください。</p></div></li>
+      </ul>
+    </div>
+    <div class="floor">
+      <div class="floor-head"><span class="n">3F</span>展望・屋外</div>
+      <ul>
+        <li><span class="no">6</span><div class="t"><h4>展望テラス</h4><p>屋外のため、位置情報でも取得できます。</p></div></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>SCHEDULE</span><h2>開催概要・イベント</h2></div>
+    <table class="schedule">
+      <!-- ▼差し替え -->
+      <tr><th>開催期間</th><td>2026年9月1日（火）〜2027年3月31日（水）</td></tr>
+      <tr><th>参加費</th><td>無料（別途、入館料が必要です）</td></tr>
+      <tr><th>対象</th><td>どなたでも（小学生以下は保護者同伴でお願いします）</td></tr>
+      <tr><th>景品引換</th><td>1階ミュージアムショップ／9:30–17:00</td></tr>
+      <tr><th>関連イベント</th><td>10/12（土）学芸員によるARツアー（14:00–／要予約）</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="sec" style="background:var(--panel)">
+  <div class="wrap">
+    <div class="sec-head"><span>INFORMATION</span><h2>館内のご案内</h2></div>
+    <div class="banners">
+      <!-- ▼差し替え：バナーは自由に。href を各ページへ -->
+      <a class="banner" href="#"><div class="ph">バナー</div><div class="cap">フロアマップ</div></a>
+      <a class="banner" href="#"><div class="ph">バナー</div><div class="cap">企画展のご案内</div></a>
+      <a class="banner" href="#"><div class="ph">バナー</div><div class="cap">ミュージアムショップ</div></a>
+      <a class="banner" href="#"><div class="ph">バナー</div><div class="cap">アクセス・駐車場</div></a>
+    </div>
+    <div style="margin-top:26px">
+      <div class="notice">
+        <h3>ご参加にあたって</h3>
+        <ul>
+          <!-- ▼差し替え：施設のルールに合わせてください -->
+          <li>展示室内では、他のお客様の妨げにならないようご配慮ください。</li>
+          <li>撮影が禁止されている展示があります。表示に従ってください。</li>
+          <li>歩きながらの操作はおやめください。立ち止まってご利用ください。</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <!-- ▼差し替え -->
+    <strong>○○ミュージアム</strong><br>〒000-0000 ○○県○○市○○1-2-3／000-000-0000
+    <div class="links">
+      <a href="#">プライバシーポリシー</a>
+      <a href="#">利用規約</a>
+      <a href="#">お問い合わせ</a>
+    </div>
+    <small>© 2026 ○○ミュージアム. Powered by あてんど.</small>
+  </div>
+</footer>
+
+<!-- ▼スマホで常に出るAR導線。href は上と同じURLに揃えてください -->
+<div class="sticky"><a href="https://app.attend-ar.com/r/XXXXXXXXXX">ラリーを始める</a></div>
+
+</body>
+</html>

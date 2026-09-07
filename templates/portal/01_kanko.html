@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- ▼差し替え：タイトルと説明文（検索結果・SNSシェアに出ます） -->
+<title>○○エリア めぐりMAP｜スタンプラリー開催中</title>
+<meta name="description" content="○○エリアの見どころをめぐって、スマホでスタンプを集めよう。">
+<style>
+/* =======================================================
+   あてんど 受け皿サイト テンプレート 01：観光周遊
+   観光協会・DMO・広域自治体向け
+   -------------------------------------------------------
+   色を変えるときは、下の --brand と --brand-dark だけ
+   差し替えれば全体が揃います。
+   ======================================================= */
+:root{
+  --brand:#0f766e;        /* ▼差し替え：主役の色 */
+  --brand-dark:#115e59;   /* ▼差し替え：主役の色の濃いほう */
+  --ink:#1f2937;
+  --sub:#6b7280;
+  --bg:#ffffff;
+  --panel:#f6f8f7;
+  --line:#e3e8e6;
+  --radius:16px;
+  --serif:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;
+  --sans:"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.8;-webkit-text-size-adjust:100%}
+img{max-width:100%;display:block}
+a{color:inherit}
+.wrap{max-width:960px;margin:0 auto;padding:0 20px}
+.ph{background:linear-gradient(135deg,#e8eeec,#d8e3e0);display:flex;align-items:center;justify-content:center;color:#9aa8a4;font-size:12px;letter-spacing:.1em}
+
+/* ---- ヘッダー ---- */
+header{position:sticky;top:0;z-index:30;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.headbar{max-width:960px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;text-decoration:none}
+.logo .mark{width:34px;height:34px;border-radius:9px;background:var(--brand);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900}
+.headbar nav{margin-left:auto;display:flex;gap:18px;font-size:13px}
+.headbar nav a{text-decoration:none;color:var(--sub)}
+.headbar nav a:hover{color:var(--brand)}
+
+/* ---- ヒーロー ---- */
+.hero{position:relative;min-height:460px;display:flex;align-items:flex-end;
+  background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.55)),linear-gradient(135deg,#cfded9,#9fbdb4)}
+.hero .inner{max-width:960px;margin:0 auto;padding:0 20px 48px;color:#fff;width:100%}
+.hero .eyebrow{font-size:12px;letter-spacing:.35em;opacity:.9;margin:0 0 14px}
+.hero h1{font-family:var(--serif);font-size:44px;line-height:1.3;margin:0 0 14px;font-weight:800;text-shadow:0 2px 16px rgba(0,0,0,.25)}
+.hero p{margin:0;font-size:15px;max-width:34em;opacity:.95}
+@media(max-width:700px){.hero{min-height:380px}.hero h1{font-size:30px}}
+
+/* ---- AR導線（このサイトの目的。必ず残してください） ---- */
+.ar{background:var(--brand);color:#fff;padding:44px 0}
+.ar .inner{max-width:960px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:28px}
+.ar .txt{flex:1;min-width:0}
+.ar h2{margin:0 0 8px;font-size:24px;font-weight:800}
+.ar p{margin:0;font-size:14px;opacity:.9;line-height:1.75}
+.ar .btn{flex-shrink:0;background:#fff;color:var(--brand-dark);text-decoration:none;font-weight:800;
+  padding:18px 34px;border-radius:999px;font-size:16px;white-space:nowrap;box-shadow:0 8px 22px rgba(0,0,0,.18);transition:.25s}
+.ar .btn:hover{transform:translateY(-2px);box-shadow:0 12px 28px rgba(0,0,0,.24)}
+@media(max-width:760px){.ar .inner{flex-direction:column;text-align:center;gap:20px}.ar .btn{width:100%;text-align:center}}
+
+/* ---- 見出し ---- */
+.sec{padding:64px 0}
+.sec-head{text-align:center;margin-bottom:36px}
+.sec-head span{display:inline-block;font-size:11px;letter-spacing:.3em;color:var(--brand);font-weight:800;margin-bottom:8px}
+.sec-head h2{font-family:var(--serif);font-size:28px;margin:0;font-weight:800}
+
+/* ---- 見どころ3枚 ---- */
+.picks{display:grid;grid-template-columns:repeat(3,1fr);gap:22px}
+.pick{border-radius:var(--radius);overflow:hidden;background:var(--panel);border:1px solid var(--line)}
+.pick .ph{height:150px}
+.pick .body{padding:18px}
+.pick h3{margin:0 0 6px;font-size:16px}
+.pick p{margin:0;font-size:13px;color:var(--sub);line-height:1.75}
+@media(max-width:760px){.picks{grid-template-columns:1fr}}
+
+/* ---- スポット一覧 ---- */
+.spots{background:var(--panel);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.spot{display:flex;gap:18px;padding:20px 0;border-bottom:1px dashed var(--line);align-items:center}
+.spot:last-child{border-bottom:none}
+.spot .ph{width:110px;height:80px;border-radius:10px;flex-shrink:0}
+.spot .txt{flex:1;min-width:0}
+.spot h3{margin:0 0 4px;font-size:16px}
+.spot p{margin:0;font-size:13px;color:var(--sub)}
+.spot .no{width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;font-size:13px;font-weight:800;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+@media(max-width:600px){.spot .ph{width:78px;height:60px}}
+
+/* ---- モデルコース ---- */
+.course{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.course-card{border:1px solid var(--line);border-radius:var(--radius);padding:24px}
+.course-card .tag{display:inline-block;background:var(--brand);color:#fff;font-size:11px;font-weight:800;
+  padding:4px 11px;border-radius:5px;margin-bottom:12px}
+.course-card h3{margin:0 0 10px;font-size:18px}
+.course-card ol{margin:0;padding-left:1.2em;font-size:13.5px;color:var(--sub)}
+.course-card li{margin-bottom:6px}
+@media(max-width:760px){.course{grid-template-columns:1fr}}
+
+/* ---- バナー枠（クライアントが自由に入れる場所） ---- */
+.banners{display:grid;grid-template-columns:repeat(2,1fr);gap:18px}
+.banner{display:block;border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);text-decoration:none}
+.banner .ph{height:110px}
+.banner .cap{padding:14px 16px;font-size:14px;font-weight:700}
+.banner .cap small{display:block;font-weight:400;font-size:12px;color:var(--sub);margin-top:3px}
+@media(max-width:760px){.banners{grid-template-columns:1fr}}
+
+/* ---- アクセス・お知らせ ---- */
+.info{display:grid;grid-template-columns:1.3fr 1fr;gap:34px}
+.news li{border-bottom:1px dashed var(--line);padding:12px 0;font-size:14px;list-style:none}
+.news li time{display:block;font-size:12px;color:var(--brand);font-weight:700}
+.news ul{margin:0;padding:0}
+.access dl{margin:0;font-size:14px}
+.access dt{font-weight:700;margin-top:14px;font-size:13px;color:var(--brand)}
+.access dd{margin:2px 0 0}
+@media(max-width:760px){.info{grid-template-columns:1fr}}
+
+/* ---- フッター ---- */
+footer{background:#101c1a;color:#cfdad7;padding:44px 0 90px;font-size:13px}
+footer .flx{display:flex;flex-wrap:wrap;gap:26px;justify-content:space-between}
+footer a{color:#cfdad7;text-decoration:none}
+footer .links{display:flex;gap:18px;flex-wrap:wrap}
+footer small{display:block;margin-top:24px;color:#7d908c}
+
+/* ---- スマホ固定のAR導線（離脱を防ぐ最後の受け皿） ---- */
+.sticky{position:fixed;left:0;right:0;bottom:0;z-index:40;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  background:rgba(255,255,255,.95);backdrop-filter:blur(8px);border-top:1px solid var(--line);display:none}
+.sticky a{display:block;background:var(--brand);color:#fff;text-align:center;text-decoration:none;
+  font-weight:800;padding:15px;border-radius:12px;font-size:15px}
+@media(max-width:760px){.sticky{display:block}footer{padding-bottom:110px}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="headbar">
+    <!-- ▼差し替え：ロゴ。画像にする場合は <img src="logo.png" alt="○○観光協会" style="height:34px"> に置き換え -->
+    <a class="logo" href="#"><span class="mark">○</span>○○エリア めぐりMAP</a>
+    <nav>
+      <a href="#spots">スポット</a>
+      <a href="#course">モデルコース</a>
+      <a href="#access">アクセス</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ▼差し替え：ヒーロー背景画像。.hero の background に url(hero.jpg) を足してください -->
+<section class="hero">
+  <div class="inner">
+    <p class="eyebrow">S T A M P &nbsp; R A L L Y</p>
+    <h1>歩いて、かざして、<br>この街を集める。</h1>
+    <p>○○エリアの見どころ12ヶ所をめぐるデジタルスタンプラリー。アプリのインストールは要りません。</p>
+  </div>
+</section>
+
+<!-- ============================================================
+     ▼▼▼ ここは必ず残してください（このサイトの目的） ▼▼▼
+     href をあてんどが発行したスタンプラリーURLに差し替えます。
+     例：https://app.attend-ar.com/r/7kdM2xVaPq
+     ============================================================ -->
+<section class="ar" id="ar">
+  <div class="inner">
+    <div class="txt">
+      <h2>スタンプラリーに参加する</h2>
+      <p>登録不要。開いた瞬間から始められます。スポットに近づくと、その場にARが現れてスタンプが押されます。</p>
+    </div>
+    <a class="btn" href="https://app.attend-ar.com/r/XXXXXXXXXX">いますぐ始める →</a>
+  </div>
+</section>
+<!-- ▲▲▲ ここまで ▲▲▲ -->
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>HIGHLIGHTS</span><h2>この街の見どころ</h2></div>
+    <div class="picks">
+      <!-- ▼差し替え：3枚。画像は .ph を <img src="..." alt=""> に置き換え -->
+      <article class="pick"><div class="ph">画像 800×450</div>
+        <div class="body"><h3>歴史ある町並み</h3><p>江戸期の面影を残す通り。散策の起点になります。</p></div></article>
+      <article class="pick"><div class="ph">画像 800×450</div>
+        <div class="body"><h3>季節の風景</h3><p>春は桜、秋は紅葉。四季ごとに表情が変わります。</p></div></article>
+      <article class="pick"><div class="ph">画像 800×450</div>
+        <div class="body"><h3>土地の味</h3><p>老舗から新しい店まで。歩きながら味わえます。</p></div></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec spots" id="spots">
+  <div class="wrap">
+    <div class="sec-head"><span>SPOTS</span><h2>スタンプスポット</h2></div>
+    <!-- ▼差し替え：スポットを増減してください。番号はラリーの並び順に合わせます -->
+    <div class="spot"><span class="no">1</span><div class="ph">写真</div>
+      <div class="txt"><h3>○○神社</h3><p>境内に入ると自動でスタンプが押されます／9:00–17:00</p></div></div>
+    <div class="spot"><span class="no">2</span><div class="ph">写真</div>
+      <div class="txt"><h3>○○資料館</h3><p>受付横のスタンプ台にスマホをかざしてください／10:00–16:30</p></div></div>
+    <div class="spot"><span class="no">3</span><div class="ph">写真</div>
+      <div class="txt"><h3>○○商店街 中央広場</h3><p>広場のサインからQRを読み取れます／終日</p></div></div>
+    <div class="spot"><span class="no">4</span><div class="ph">写真</div>
+      <div class="txt"><h3>○○展望台</h3><p>展望デッキに到着すると押されます／8:00–20:00</p></div></div>
+  </div>
+</section>
+
+<section class="sec" id="course">
+  <div class="wrap">
+    <div class="sec-head"><span>MODEL COURSE</span><h2>モデルコース</h2></div>
+    <div class="course">
+      <!-- ▼差し替え：所要時間と行程 -->
+      <article class="course-card"><span class="tag">半日 / 約3時間</span>
+        <h3>はじめての○○めぐり</h3>
+        <ol><li>○○駅 スタート</li><li>○○神社（スタンプ1）</li><li>○○商店街で昼食</li><li>○○展望台（スタンプ4）</li></ol></article>
+      <article class="course-card"><span class="tag">1日 / 約6時間</span>
+        <h3>全スポット制覇コース</h3>
+        <ol><li>○○駅 スタート</li><li>北エリア 4スポット</li><li>○○資料館で休憩</li><li>南エリア 8スポット</li></ol></article>
+    </div>
+  </div>
+</section>
+
+<section class="sec">
+  <div class="wrap">
+    <div class="sec-head"><span>PICK UP</span><h2>おすすめ・お得な情報</h2></div>
+    <div class="banners">
+      <!-- ▼差し替え：バナーは自由に。href を各サイトへ。数は増減して構いません -->
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">参加店舗で使えるクーポン<small>スタンプ3個で解放されます</small></div></a>
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">周遊バス 1日乗車券<small>スポット間の移動にどうぞ</small></div></a>
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">宿泊プランのご案内<small>提携旅館・ホテル</small></div></a>
+      <a class="banner" href="#"><div class="ph">バナー 1200×400</div>
+        <div class="cap">公式SNS<small>最新の開催情報はこちら</small></div></a>
+    </div>
+  </div>
+</section>
+
+<section class="sec" id="access" style="background:var(--panel);border-top:1px solid var(--line)">
+  <div class="wrap info">
+    <div class="news">
+      <div class="sec-head" style="text-align:left"><span>NEWS</span><h2>お知らせ</h2></div>
+      <ul>
+        <!-- ▼差し替え：お知らせ。不要なら section ごと削除して構いません -->
+        <li><time>2026.09.01</time>スタンプラリーの開催期間を11月末まで延長しました</li>
+        <li><time>2026.08.20</time>○○展望台がスポットに加わりました</li>
+        <li><time>2026.08.01</time>デジタルスタンプラリーを開始しました</li>
+      </ul>
+    </div>
+    <div class="access">
+      <div class="sec-head" style="text-align:left"><span>ACCESS</span><h2>開催概要</h2></div>
+      <dl>
+        <dt>開催期間</dt><dd>2026年8月1日（土）〜11月30日（月）</dd>
+        <dt>参加費</dt><dd>無料</dd>
+        <dt>景品引換</dt><dd>○○観光案内所（9:00–17:00）</dd>
+        <dt>お問い合わせ</dt><dd>○○観光協会 000-000-0000</dd>
+      </dl>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap flx">
+    <!-- ▼差し替え：運営者名と各種リンク -->
+    <div><strong>○○観光協会</strong><br>〒000-0000 ○○県○○市○○1-2-3</div>
+    <div class="links">
+      <a href="#">プライバシーポリシー</a>
+      <a href="#">利用規約</a>
+      <a href="#">お問い合わせ</a>
+    </div>
+  </div>
+  <div class="wrap"><small>© 2026 ○○観光協会. Powered by あてんど.</small></div>
+</footer>
+
+<!-- ▼スマホで常に出るAR導線。href は上と同じURLに揃えてください -->
+<div class="sticky"><a href="https://app.attend-ar.com/r/XXXXXXXXXX">スタンプラリーに参加する</a></div>
+
+</body>
+</html>
