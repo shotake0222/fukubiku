@@ -2,6 +2,12 @@
 --
 -- schema_attend_rally.sql / add_rally_links_and_themes.sql を実行済みのDBに追加で流す。
 -- 何度実行しても壊れません(冪等)。
+--
+-- 【注意】create table if not exists は「テーブルが既にあれば中身を確認せず素通り」する。
+-- そのため、以前のバージョンで作られたテーブルが残っていると、
+-- 流し直しても列は増えない(実際に accent_color が無い状態が発生した)。
+-- それを防ぐため、create のあとに add column if not exists を必ず並べてある。
+-- すでに列がある場合は何も起きない。
 
 -- ============================================================
 -- 1) 受け皿サイト（ポータル）
@@ -69,6 +75,50 @@ create table if not exists attend_portals (
   updated_at timestamptz not null default now()
 );
 
+
+-- 以前のバージョンで作られたテーブルが残っている場合に備えて、
+-- 足りない列を1つずつ補う。create table if not exists だけでは列は増えない。
+alter table attend_portals add column if not exists rally_id uuid references attend_rallies(id) on delete set null;
+alter table attend_portals add column if not exists custom_ar_url text;
+alter table attend_portals add column if not exists name text not null default '受け皿サイト';
+alter table attend_portals add column if not exists template text not null default 'kanko';
+alter table attend_portals add column if not exists status text not null default 'draft';
+alter table attend_portals add column if not exists ended_message text;
+alter table attend_portals add column if not exists ended_link_url text;
+alter table attend_portals add column if not exists ended_link_label text;
+alter table attend_portals add column if not exists brand_color text not null default '#0f766e';
+alter table attend_portals add column if not exists brand_color_dark text not null default '#115e59';
+alter table attend_portals add column if not exists accent_color text;
+alter table attend_portals add column if not exists logo_url text;
+alter table attend_portals add column if not exists logo_text text;
+alter table attend_portals add column if not exists site_title text not null default 'スタンプラリー';
+alter table attend_portals add column if not exists site_description text;
+alter table attend_portals add column if not exists og_image_url text;
+alter table attend_portals add column if not exists hero_image_url text;
+alter table attend_portals add column if not exists hero_eyebrow text;
+alter table attend_portals add column if not exists hero_title text;
+alter table attend_portals add column if not exists hero_text text;
+alter table attend_portals add column if not exists ar_heading text not null default 'スタンプラリーに参加する';
+alter table attend_portals add column if not exists ar_text text;
+alter table attend_portals add column if not exists ar_button_label text not null default 'いますぐ始める';
+alter table attend_portals add column if not exists status_line text;
+alter table attend_portals add column if not exists owner_name text;
+alter table attend_portals add column if not exists owner_address text;
+alter table attend_portals add column if not exists privacy_url text;
+alter table attend_portals add column if not exists terms_url text;
+alter table attend_portals add column if not exists contact_url text;
+alter table attend_portals add column if not exists copyright_text text;
+alter table attend_portals add column if not exists created_at timestamptz not null default now();
+alter table attend_portals add column if not exists updated_at timestamptz not null default now();
+
+alter table attend_portals drop constraint if exists attend_portals_template_check;
+alter table attend_portals add constraint attend_portals_template_check
+  check (template in ('kanko', 'shotengai', 'shisetsu', 'seichi', 'jousetsu'));
+alter table attend_portals drop constraint if exists attend_portals_status_check;
+alter table attend_portals add constraint attend_portals_status_check
+  check (status in ('draft', 'published', 'ended'));
+create unique index if not exists attend_portals_hash_key on attend_portals (hash);
+
 create index if not exists attend_portals_project_idx on attend_portals (project_id);
 create index if not exists attend_portals_hash_idx on attend_portals (hash);
 
@@ -104,6 +154,23 @@ create table if not exists attend_portal_blocks (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+
+-- 同上。以前のバージョンのテーブルが残っていても列が揃うようにする。
+alter table attend_portal_blocks add column if not exists sort_order integer not null default 0;
+alter table attend_portal_blocks add column if not exists title text;
+alter table attend_portal_blocks add column if not exists body text;
+alter table attend_portal_blocks add column if not exists meta text;
+alter table attend_portal_blocks add column if not exists image_url text;
+alter table attend_portal_blocks add column if not exists link_url text;
+alter table attend_portal_blocks add column if not exists badge text;
+alter table attend_portal_blocks add column if not exists enabled boolean not null default true;
+alter table attend_portal_blocks add column if not exists created_at timestamptz not null default now();
+alter table attend_portal_blocks add column if not exists updated_at timestamptz not null default now();
+
+alter table attend_portal_blocks drop constraint if exists attend_portal_blocks_kind_check;
+alter table attend_portal_blocks add constraint attend_portal_blocks_kind_check
+  check (kind in ('pick', 'spot', 'banner', 'news', 'faq', 'outline', 'note', 'chapter'));
 
 create index if not exists attend_portal_blocks_portal_idx
   on attend_portal_blocks (portal_id, kind, sort_order);
@@ -186,3 +253,7 @@ language sql as $$
   delete from attend_rally_login_codes
    where expires_at < now() - interval '1 day';
 $$;
+
+-- 列を足した直後は、アプリ側から「そんな列は無い」と見えることがある。
+-- 通常は自動で反映されるが、明示的に促しておく。
+notify pgrst, 'reload schema';

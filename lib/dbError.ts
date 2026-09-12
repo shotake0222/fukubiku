@@ -20,6 +20,14 @@ const MISSING_TABLE_HINTS: { match: RegExp; sql: string }[] = [
   // PostgRESTは「'sections' column of 'attend_portals'」という言い回しをするので、
   // 直接SQLの「attend_portals.design」形式と両方を拾う。
   { match: /(attend_portals\.|column\s+"?)(design|sections|nav|sns)\b|['"](design|sections|nav|sns)['"]\s+column/, sql: "supabase/add_portal_design.sql" },
+  // 受け皿サイトの「テーブルはあるが列が足りない」状態。
+  // create table if not exists は既存テーブルの中身を直さないので、
+  // 古いバージョンで作られたテーブルが残っているとこうなる。
+  // schema_attend_portal.sql を流し直しても直らないため、修復用SQLへ案内する。
+  {
+    match: /column\s+"?attend_portals?(_blocks)?"?\.|['"]\w+['"]\s+column of\s+['"](public\.)?attend_portals?(_blocks)?['"]/,
+    sql: "supabase/repair_attend_portal.sql",
+  },
   // ラリーのテーマ・配布URL
   { match: /attend_rally_links|attend_rallies\.theme/, sql: "supabase/add_rally_links_and_themes.sql" },
   // 参加者のメール登録（受け皿サイトと同じSQLで入る）

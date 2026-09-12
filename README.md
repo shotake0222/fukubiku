@@ -299,3 +299,10 @@ SQL Editorで流すと、どのSQLがまだ実行されていないかが一覧�
 上から順に流してください。
 
 管理画面のエラー表示にも、流すべきSQLのファイル名が出るようにしてあります。
+
+**「テーブルはあるのに列が無い」と言われた場合**（例: `Could not find the 'accent_color'
+column of 'attend_portals'`）は、`supabase/repair_attend_portal.sql` を流してください。
+`create table if not exists` は既にあるテーブルの中身を直さないため、
+以前のバージョンで作られたテーブルが残っていると、スキーマSQLを流し直しても列は増えません。
+（現在の `schema_attend_portal.sql` には `add column if not exists` を並べてあるので、
+新しく流し直す場合はこちらだけでも直ります）

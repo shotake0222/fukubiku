@@ -25,6 +25,17 @@ with checks(sort_order, item, kind, name, needs) as (values
   (12, 'attend_portal_blocks テーブル',       'table', 'attend_portal_blocks',        'supabase/schema_attend_portal.sql'),
   (13, 'attend_rally_login_codes テーブル',   'table', 'attend_rally_login_codes',    'supabase/schema_attend_portal.sql'),
   (14, 'attend_rally_participants.email 列',  'col',   'attend_rally_participants.email', 'supabase/schema_attend_portal.sql'),
+  -- テーブルがあっても、古いバージョンで作られていて列が足りないことがある。
+  -- (create table if not exists は、既にあるテーブルの中身を直さないため)
+  (14.1, 'attend_portals.accent_color 列',    'col',   'attend_portals.accent_color',   'supabase/repair_attend_portal.sql'),
+  (14.2, 'attend_portals.logo_text 列',       'col',   'attend_portals.logo_text',      'supabase/repair_attend_portal.sql'),
+  (14.3, 'attend_portals.ar_heading 列',      'col',   'attend_portals.ar_heading',     'supabase/repair_attend_portal.sql'),
+  (14.4, 'attend_portals.status_line 列',     'col',   'attend_portals.status_line',    'supabase/repair_attend_portal.sql'),
+  (14.5, 'attend_portals.copyright_text 列',  'col',   'attend_portals.copyright_text', 'supabase/repair_attend_portal.sql'),
+  (14.6, 'attend_portals.og_image_url 列',    'col',   'attend_portals.og_image_url',   'supabase/repair_attend_portal.sql'),
+  (14.7, 'attend_portal_blocks.sort_order 列','col',   'attend_portal_blocks.sort_order','supabase/repair_attend_portal.sql'),
+  (14.8, 'attend_portal_blocks.enabled 列',   'col',   'attend_portal_blocks.enabled',  'supabase/repair_attend_portal.sql'),
+  (14.9, 'attend_portal_blocks.link_url 列',  'col',   'attend_portal_blocks.link_url', 'supabase/repair_attend_portal.sql'),
   -- 受け皿サイトのデザイン調整
   (15, 'attend_portals.design 列',            'col',   'attend_portals.design',       'supabase/add_portal_design.sql'),
   (16, 'attend_portals.sections 列',          'col',   'attend_portals.sections',     'supabase/add_portal_design.sql'),
