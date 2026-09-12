@@ -107,3 +107,15 @@ function pickCandidates(presets: PresetObject[], category: string, label: string
   }
   return inCat.filter((p) => p.name.includes(label));
 }
+
+// そのカテゴリに登録されているテンプレートの件数。
+// 0件のカテゴリは選んでも景品行が作れないため、UI側で選べないようにする。
+export function countPresetsInCategory(presets: PresetObject[], category: string): number {
+  return presets.filter((p) => matchesCategory(p, category)).length;
+}
+
+// テンプレートが1件も登録されていないカテゴリの一覧。
+// 台帳(preset_objects)がシード未実行などで欠けていることを画面上で気づけるようにする。
+export function emptyCategories(presets: PresetObject[]): string[] {
+  return PRESET_CATEGORIES.filter((c) => countPresetsInCategory(presets, c.value) === 0).map((c) => c.value);
+}

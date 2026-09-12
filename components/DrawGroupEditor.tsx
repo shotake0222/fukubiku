@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import { DRAW_COOLDOWN_HOURS } from "@/lib/drawCooldown";
 import type { DisplayType, DrawGroup, DrawGroupEntry, ObjectSource, PresetObject } from "@/lib/types";
-import { DEFAULT_TIER_WEIGHTS, PRESET_CATEGORIES } from "@/lib/types";
+import { DEFAULT_TIER_WEIGHTS } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { categoryHasBothFormats, flatFormatLabel, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
+import CategoryChips from "@/components/CategoryChips";
+import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 import { quickFillLabels } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
@@ -391,37 +392,12 @@ export default function DrawGroupEditor({
           作成時に選んだカテゴリを間違えた場合など、下のボタンで景品リストごと選び直せます
           (現在のリストは置き換わります)。確率だけを微調整したい場合はここは使わず、下のリストを直接編集してください。
         </p>
-        <div className="flex flex-wrap gap-2">
-          {PRESET_CATEGORIES.map((cat) =>
-            categoryHasBothFormats(presets, cat.value) ? (
-              <span key={cat.value} className="inline-flex rounded-full border overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => resetToCategory(cat.value, "glb")}
-                  className="text-xs px-3 py-1 hover:bg-slate-50"
-                >
-                  {cat.label}（3Dオブジェクト）でやり直す
-                </button>
-                <button
-                  type="button"
-                  onClick={() => resetToCategory(cat.value, "flat")}
-                  className="text-xs px-3 py-1 border-l hover:bg-slate-50"
-                >
-                  {cat.label}（{flatFormatLabel(presets, cat.value)}）でやり直す
-                </button>
-              </span>
-            ) : (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => resetToCategory(cat.value)}
-                className="text-xs px-3 py-1 rounded-full border hover:bg-slate-50"
-              >
-                {cat.label}でやり直す
-              </button>
-            )
-          )}
-        </div>
+        <CategoryChips
+          presets={presets}
+          showSelection={false}
+          onSelect={(c, f) => resetToCategory(c, f ?? null)}
+          suffix="でやり直す"
+        />
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
           景品ごとに個別のテンプレートを設定する(通常は不要です)

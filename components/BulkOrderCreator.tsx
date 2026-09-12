@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/client";
 import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import { LIMIT_PERIOD_OPTIONS, limitPeriodLabel } from "@/lib/drawLimit";
 import { generateHash } from "@/lib/hash";
-import { PRESET_CATEGORIES, type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
+import { type DisplayType, type ObjectSource, type PresetObject } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
-import { categoryHasBothFormats, flatFormatLabel, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
+import CategoryChips from "@/components/CategoryChips";
+import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 import { quickFillLabels } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
@@ -434,47 +435,12 @@ export default function BulkOrderCreator({ presets }: { presets: PresetObject[] 
           通常、1つの景品セットの中で景品ごとに違うゲーム(カテゴリ)を混ぜて使うことはないため、
           ここで1つ選ぶと景品ごとのテンプレートが自動で割り当てられます。
         </p>
-        <div className="flex flex-wrap gap-2">
-          {PRESET_CATEGORIES.map((cat) =>
-            categoryHasBothFormats(presets, cat.value) ? (
-              <span key={cat.value} className="inline-flex rounded-full border overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => selectCategory(cat.value, "glb")}
-                  className={`text-xs px-3 py-1 ${
-                    selectedCategory === cat.value && selectedFormat === "glb"
-                      ? "bg-slate-900 text-white"
-                      : "hover:bg-slate-50"
-                  }`}
-                >
-                  {cat.label}（3Dオブジェクト）
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectCategory(cat.value, "flat")}
-                  className={`text-xs px-3 py-1 border-l ${
-                    selectedCategory === cat.value && selectedFormat === "flat"
-                      ? "bg-slate-900 text-white"
-                      : "hover:bg-slate-50"
-                  }`}
-                >
-                  {cat.label}（{flatFormatLabel(presets, cat.value)}）
-                </button>
-              </span>
-            ) : (
-              <button
-                key={cat.value}
-                type="button"
-                onClick={() => selectCategory(cat.value)}
-                className={`text-xs px-3 py-1 rounded-full border ${
-                  selectedCategory === cat.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
-                }`}
-              >
-                {cat.label}
-              </button>
-            )
-          )}
-        </div>
+        <CategoryChips
+          presets={presets}
+          selectedCategory={selectedCategory}
+          selectedFormat={selectedFormat}
+          onSelect={(c, f) => selectCategory(c, f ?? null)}
+        />
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />
           景品ごとに個別のテンプレートを設定する(通常は不要です)
