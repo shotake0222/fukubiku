@@ -122,19 +122,19 @@ export default function AttendProjectEditor({
   async function handleAddRally() {
     setAddingRally(true);
     setError(null);
-    const created = await createDefaultRally(supabase, project.id, project.client_name);
+    const res = await createDefaultRally(supabase, project.id, project.client_name);
     setAddingRally(false);
-    if (!created) {
-      setError("スタンプラリーの作成に失敗しました");
+    if (!res.ok) {
+      setError(res.message);
       return;
     }
-    router.push(`/admin/attend/rallies/${created.id}`);
+    router.push(`/admin/attend/rallies/${res.rally.id}`);
   }
 
   async function handleAddPortal() {
     setAddingPortal(true);
     setError(null);
-    const created = await createDefaultPortal(
+    const res = await createDefaultPortal(
       supabase,
       project.id,
       project.client_name,
@@ -142,11 +142,11 @@ export default function AttendProjectEditor({
       rallies[0]?.id ?? null
     );
     setAddingPortal(false);
-    if (!created) {
-      setError("受け皿サイトの作成に失敗しました");
+    if (!res.ok) {
+      setError(res.message);
       return;
     }
-    router.push(`/admin/attend/portals/${created.id}`);
+    router.push(`/admin/attend/portals/${res.portal.id}`);
   }
 
   async function handleAddItem() {
@@ -220,7 +220,11 @@ export default function AttendProjectEditor({
           )}
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p className="text-sm text-red-600 whitespace-pre-line bg-red-50 border border-red-200 rounded-lg p-3">
+            {error}
+          </p>
+        )}
         <button
           onClick={handleSave}
           disabled={saving}

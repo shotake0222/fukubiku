@@ -1141,7 +1141,11 @@ export default function AttendPortalEditor({
         </div>
       </section>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="text-sm text-red-600 whitespace-pre-line bg-red-50 border border-red-200 rounded-lg p-3">
+          {error}
+        </p>
+      )}
       {saved && <p className="text-sm text-emerald-600">保存しました</p>}
 
       <div className="flex items-center gap-3">

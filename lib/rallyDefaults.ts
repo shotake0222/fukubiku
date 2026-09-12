@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateHash } from "@/lib/hash";
 import { generateSpotCode } from "@/lib/rally";
+import { describeDbError } from "@/lib/dbError";
 
 /**
  * 新しい案件には、最初からスタンプラリーが1本入っている状態にする。
@@ -24,7 +25,9 @@ export async function createDefaultRally(
   supabase: SupabaseClient,
   projectId: string,
   clientName: string
-): Promise<{ id: string; hash: string } | null> {
+): Promise<
+  { ok: true; rally: { id: string; hash: string } } | { ok: false; message: string }
+> {
   const modelUrls = [...DEFAULT_SPOT_MODELS, DEFAULT_REWARD_MODEL];
   const { data: presets } = await supabase
     .from("preset_objects")
@@ -54,7 +57,9 @@ export async function createDefaultRally(
     .select("id, hash")
     .single();
 
-  if (error || !rally) return null;
+  if (error || !rally) {
+    return { ok: false, message: describeDbError(error, "スタンプラリーの作成") };
+  }
   const created = rally as { id: string; hash: string };
 
   const spots = DEFAULT_SPOT_NAMES.map((name, i) => {
@@ -73,7 +78,15 @@ export async function createDefaultRally(
     };
   });
 
-  await supabase.from("attend_rally_spots").insert(spots);
+  const { error: sErr } = await supabase.from("attend_rally_spots").insert(spots);
+  if (sErr) {
+    return {
+      ok: false,
+      message:
+        describeDbError(sErr, "スポットの作成") +
+        "\nスタンプラリー自体は作成済みです。一覧から開いて、スポットは手で追加できます。",
+    };
+  }
 
   // 配布用URLを1本発行しておく。埋め込み用は必要になったときに管理画面から足す。
   // attend_rallies.hash と同じ値をリンク表にも入れることで、
@@ -85,5 +98,5 @@ export async function createDefaultRally(
     mode: "standalone",
   });
 
-  return created;
+  return { ok: true, rally: created };
 }

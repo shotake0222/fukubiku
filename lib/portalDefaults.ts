@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateHash } from "@/lib/hash";
 import type { PortalTemplate } from "@/lib/portal/types";
+import { describeDbError } from "@/lib/dbError";
 
 /**
  * 受け皿サイトの雛形。
@@ -89,7 +90,9 @@ export async function createDefaultPortal(
   clientName: string,
   template: PortalTemplate,
   rallyId: string | null
-): Promise<{ id: string; hash: string } | null> {
+): Promise<
+  { ok: true; portal: { id: string; hash: string } } | { ok: false; message: string }
+> {
   const preset = PRESETS[template];
 
   const { data, error } = await supabase
@@ -114,10 +117,14 @@ export async function createDefaultPortal(
     .select("id, hash")
     .single();
 
-  if (error || !data) return null;
+  if (error || !data) {
+    return { ok: false, message: describeDbError(error, "受け皿サイトの作成") };
+  }
   const portal = data as { id: string; hash: string };
 
-  await supabase.from("attend_portal_blocks").insert(
+  // 枠(ブロック)の作成に失敗しても、受け皿サイト自体は作れている。
+  // 丸ごと失敗扱いにすると作り直しになるので、作った上で理由だけ伝える。
+  const { error: bErr } = await supabase.from("attend_portal_blocks").insert(
     preset.blocks.map((b, i) => ({
       portal_id: portal.id,
       kind: b.kind,
@@ -127,6 +134,14 @@ export async function createDefaultPortal(
       meta: b.meta ?? null,
     }))
   );
+  if (bErr) {
+    return {
+      ok: false,
+      message:
+        describeDbError(bErr, "受け皿サイトの枠の作成") +
+        "\n受け皿サイト自体は作成済みです。一覧から開いて、枠は手で追加できます。",
+    };
+  }
 
-  return portal;
+  return { ok: true, portal };
 }

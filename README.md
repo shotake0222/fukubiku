@@ -290,3 +290,12 @@ git push origin main
 
 1. `supabase/schema_attend_portal.sql`（テーブル本体）
 2. `supabase/add_portal_design.sql`（デザイン調整用の列）
+
+### 「作成に失敗しました」と出るとき
+
+原因のほとんどはSQLの実行漏れです。**`supabase/check_attend_setup.sql`** を
+SQL Editorで流すと、どのSQLがまだ実行されていないかが一覧で出ます
+（何も書き換えません）。`status` が `NG` の行の「NGなら実行するSQL」を、
+上から順に流してください。
+
+管理画面のエラー表示にも、流すべきSQLのファイル名が出るようにしてあります。
