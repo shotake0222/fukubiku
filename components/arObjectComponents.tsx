@@ -105,6 +105,18 @@ export function loadArScript(src: string, timeoutMs = 20000): Promise<void> {
   });
 }
 
+// A-Frameの親を辿って、実際に画面に出ているかどうかを判定する。
+// AR.jsやMindARはマーカー側のエンティティの visible を切り替えるため、
+// 自分自身の object3D.visible だけを見ても分からない。
+function isVisibleInScene(object3D: any): boolean {
+  let node = object3D;
+  while (node) {
+    if (!node.visible) return false;
+    node = node.parent;
+  }
+  return true;
+}
+
 export function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
@@ -164,7 +176,13 @@ export function registerGifImageComponent(AFRAME: any) {
 export function registerAlphaVideoComponent(AFRAME: any) {
   if (AFRAME.components["alpha-video"]) return;
   AFRAME.registerComponent("alpha-video", {
-    schema: { src: { type: "string" } },
+    schema: {
+      src: { type: "string" },
+      // 既定は「1回だけ再生して最終フレームで停止」。
+      // 結果発表の透過MP4は、当たりが出たところで止まっていてほしいため。
+      // 常時ループさせたい場合(あてんどの常設オブジェクトなど)だけ true にする。
+      loop: { type: "boolean", default: false },
+    },
     init() {
       const THREE = AFRAME.THREE;
       const src = this.data.src;
@@ -175,9 +193,7 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       video.muted = true;
       video.defaultMuted = true;
       video.setAttribute("muted", "");
-      video.loop = true;
-      video.autoplay = true;
-      video.setAttribute("autoplay", "");
+      video.loop = this.data.loop;
       video.playsInline = true;
       video.setAttribute("webkit-playsinline", "true");
       video.setAttribute("playsinline", "true");
@@ -195,8 +211,14 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       }
       video.src = src;
       this.video = video;
+      // 実際に画面に出ている間だけ再生する。マーカーを見つける前に
+      // 裏で再生し終えてしまうと、かざした瞬間には結果だけが出ている
+      // (演出が一度も見られない)ことになるため。
+      this._wantsPlay = false;
+      this._wasVisible = null;
 
       const tryPlay = () => {
+        if (!this._wantsPlay) return;
         const p = video.play();
         if (p && typeof p.catch === "function") p.catch(() => {});
       };
@@ -205,6 +227,11 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       const resumeOnGesture = () => tryPlay();
       video.addEventListener("loadeddata", tryPlay);
       video.addEventListener("canplay", tryPlay);
+      // 最後まで再生したらそこで終わり。最終フレームがテクスチャに残るので、
+      // 結果が表示されたまま静止する。
+      video.addEventListener("ended", () => {
+        this._wantsPlay = false;
+      });
       video.addEventListener("error", () => {
         if (corsRetried || !video.crossOrigin) return;
         corsRetried = true;
@@ -216,14 +243,9 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       });
       document.addEventListener("touchend", resumeOnGesture);
       document.addEventListener("click", resumeOnGesture);
-      video.addEventListener("playing", () => {
-        document.removeEventListener("touchend", resumeOnGesture);
-        document.removeEventListener("click", resumeOnGesture);
-      });
       this._resumeOnGesture = resumeOnGesture;
       this._tryPlay = tryPlay;
       video.load();
-      tryPlay();
 
       const texture = new THREE.VideoTexture(video);
       texture.minFilter = THREE.LinearFilter;
@@ -263,6 +285,31 @@ export function registerAlphaVideoComponent(AFRAME: any) {
         const h = video.videoHeight || 1;
         this.mesh.scale.set(1, h / w, 1);
       });
+    },
+    // 表示された瞬間に頭から1回再生し、隠れたら先頭へ巻き戻して止める。
+    // (マーカーを外して再度かざすと、もう一度最初から見られる)
+    tick() {
+      if (!this.video) return;
+      const visible = isVisibleInScene(this.el.object3D);
+      if (visible === this._wasVisible) return;
+      this._wasVisible = visible;
+      if (visible) {
+        this._wantsPlay = true;
+        try {
+          this.video.currentTime = 0;
+        } catch (e) {
+          /* メタデータ読み込み前は無視してよい */
+        }
+        this._tryPlay();
+      } else {
+        this._wantsPlay = false;
+        this.video.pause();
+        try {
+          this.video.currentTime = 0;
+        } catch (e) {
+          /* 同上 */
+        }
+      }
     },
     remove() {
       if (this.mesh) this.el.removeObject3D("alpha-video-mesh");
@@ -327,7 +374,7 @@ export function ObjectEntity({
   if (kind === "video") {
     return (
       <a-entity
-        alpha-video={`src: ${url}`}
+        alpha-video={`src: ${url}; loop: ${loop ? "true" : "false"}`}
         position={effectivePosition}
         rotation={modelRotation}
         scale={scale || DEFAULT_VIDEO_SCALE}
