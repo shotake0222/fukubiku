@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { PORTAL_TEMPLATES } from "@/lib/portal/types";
+import PortalTemplateGallery from "@/components/PortalTemplateGallery";
 import type { AttendPortal, AttendProject } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -48,6 +49,10 @@ export default async function AttendPortalsPage() {
       </div>
 
       {error && <p className="text-red-600 text-sm">読み込みエラー: {error.message}</p>}
+
+      {/* テンプレートの見た目は、受け皿サイトを1つも作っていなくても
+          この画面で確認できるようにしておく（提案のときに必ず要る） */}
+      <PortalTemplateGallery compact />
 
       <div className="bg-white rounded-xl shadow overflow-hidden">
         <table className="w-full text-sm">

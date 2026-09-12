@@ -9,6 +9,7 @@ import AttendProjectForm, { type AttendProjectFormValue } from "@/components/Att
 import { createDefaultRally } from "@/lib/rallyDefaults";
 import { createDefaultPortal } from "@/lib/portalDefaults";
 import { PORTAL_TEMPLATES, type PortalTemplate } from "@/lib/portal/types";
+import PortalTemplateGallery from "@/components/PortalTemplateGallery";
 import { attendDisplayTypeShort } from "@/lib/types";
 import type { AttendItem, AttendPortal, AttendProject, AttendProjectStatus, AttendRally } from "@/lib/types";
 
@@ -86,6 +87,7 @@ export default function AttendProjectEditor({
   const [addingRally, setAddingRally] = useState(false);
   const [addingPortal, setAddingPortal] = useState(false);
   const [portalTemplate, setPortalTemplate] = useState<PortalTemplate>("kanko");
+  const [showPortalGallery, setShowPortalGallery] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const siteOrigin = process.env.NEXT_PUBLIC_ATTEND_SITE_URL || "https://app.attend-ar.com";
@@ -304,27 +306,35 @@ export default function AttendProjectEditor({
               こちらでホスティングするので、公開後の修正も提供終了もこの管理画面から行えます。
             </p>
           </div>
-          <div className="flex flex-col gap-2 shrink-0">
-            <select
-              value={portalTemplate}
-              onChange={(e) => setPortalTemplate(e.target.value as PortalTemplate)}
-              className="text-xs border rounded-lg px-2 py-1.5"
+          <div className="flex flex-col gap-2 shrink-0 items-end">
+            <button
+              onClick={() => setShowPortalGallery((v) => !v)}
+              className="text-xs px-3 py-1.5 rounded-lg border hover:bg-slate-50"
             >
-              {PORTAL_TEMPLATES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
-              ))}
-            </select>
+              {showPortalGallery ? "見本を閉じる" : "テンプレートの見た目を見る"}
+            </button>
+            <span className="text-[11px] text-slate-500">
+              選択中：{PORTAL_TEMPLATES.find((t) => t.value === portalTemplate)?.label}
+            </span>
             <button
               onClick={handleAddPortal}
               disabled={addingPortal}
               className="bg-pink-600 text-white text-sm rounded-lg px-4 py-2 disabled:opacity-50"
             >
-              {addingPortal ? "作成中..." : "+ サイトを作成"}
+              {addingPortal ? "作成中..." : "+ このテンプレートで作成"}
             </button>
           </div>
         </div>
+
+        {/* テキストだけの選択肢では、どれを選べばいいか分からない。
+            実際の見た目を並べて、そこから選ぶ */}
+        {showPortalGallery && (
+          <PortalTemplateGallery
+            compact
+            selected={portalTemplate}
+            onSelect={(t) => setPortalTemplate(t)}
+          />
+        )}
 
         <ul className="divide-y">
           {portals.map((p) => (

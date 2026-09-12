@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
@@ -348,6 +348,21 @@ export default function AttendPortalEditor({
     Array.isArray(portal.sns) ? (portal.sns as PortalSnsLink[]) : []
   );
 
+  // プレビューは横に並べたいが、画面が狭いと入らない。
+  // 狭いときは折りたたみとして同じものを出す（見られない、が一番困る）。
+  const [wide, setWide] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const apply = () => {
+      setWide(mq.matches);
+      setPreviewOpen(mq.matches);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
   const [drafts, setDrafts] = useState<BlockDraft[]>(blocks.map(toDraft));
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -562,8 +577,21 @@ export default function AttendPortalEditor({
   }
 
   return (
-    <div className="xl:flex xl:gap-6 xl:items-start">
-      <div className="max-w-3xl space-y-6 xl:flex-1 xl:min-w-0">
+    <div className={wide ? "flex gap-6 items-start" : ""}>
+      <div className={`max-w-3xl space-y-6 ${wide ? "flex-1 min-w-0" : ""}`}>
+        {/* 画面が狭いとき用。開くと、横に並べたときと同じプレビューが出る */}
+        {!wide && (
+          <section className="bg-white rounded-xl shadow p-4 space-y-3">
+            <button
+              type="button"
+              onClick={() => setPreviewOpen((v) => !v)}
+              className="text-sm px-4 py-2 rounded-lg border hover:bg-slate-50 w-full"
+            >
+              {previewOpen ? "プレビューを閉じる" : "プレビューを見る（保存しなくても反映されます）"}
+            </button>
+            {previewOpen && <PortalPreview data={previewData} publicUrl={publicUrl} />}
+          </section>
+        )}
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link
@@ -1165,9 +1193,11 @@ export default function AttendPortalEditor({
       {/* 編集しながら、その場で見た目を確認する。
           色や余白の詰め方は、実際の幅で見ないと判断できないため、
           スマホ/タブレット/PCを切り替えられるようにしている。 */}
-      <aside className="hidden xl:block w-[520px] flex-shrink-0 sticky top-4">
-        <PortalPreview data={previewData} publicUrl={publicUrl} />
-      </aside>
+      {wide && (
+        <aside className="w-[460px] flex-shrink-0 sticky top-4">
+          <PortalPreview data={previewData} publicUrl={publicUrl} />
+        </aside>
+      )}
     </div>
   );
 }
