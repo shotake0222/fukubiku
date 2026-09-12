@@ -63,8 +63,11 @@ export function flatFormatLabel(presets: PresetObject[], category: string): stri
   const hasMp4 = flatItems.some(isMp4);
   const hasGif = flatItems.some(isGif);
   const hasOtherImage = flatItems.some((p) => isImage(p) && !isGif(p));
-  if (hasMp4 && !hasGif && !hasOtherImage) return "MP4";
-  if (hasGif && !hasMp4 && !hasOtherImage) return "GIF";
+  // GIFはモバイルで再生できない端末が多く、標準はあくまで透過MP4。
+  // MP4が1つでもあるカテゴリは(古いGIFが残っていても)「MP4」と表示し、
+  // 実際に選ばれるテンプレートもMP4を優先する(resolvePresetForTier参照)。
+  if (hasMp4) return "MP4";
+  if (hasGif && !hasOtherImage) return "GIF";
   return "動画/画像";
 }
 
@@ -78,14 +81,29 @@ export function resolvePresetForTier(
   label: string,
   formatPref?: FormatPref
 ): PresetObject | null {
-  const candidates = presets.filter((p) => matchesCategory(p, category) && p.name.includes(label));
+  const candidates = pickCandidates(presets, category, label);
   if (candidates.length === 0) return null;
   if (formatPref === "flat") {
-    return candidates.find(isFlat) ?? candidates[0];
+    // 平面版はMP4を最優先する。GIFはモバイル(特にiOS)で再生されないことが多く、
+    // 過去のGIF資産が残っているカテゴリでGIFが選ばれると「表示されない」不具合になる。
+    return candidates.find(isMp4) ?? candidates.find(isFlat) ?? candidates[0];
   }
   if (formatPref === "glb") {
     return candidates.find(isModel) ?? candidates[0];
   }
   const threeD = candidates.find(isModel);
-  return threeD ?? candidates[0];
+  return threeD ?? candidates.find(isMp4) ?? candidates[0];
+}
+
+// 景品名の一致判定。単純な includes だと「当たり」で検索したときに
+// 「大当たり」のテンプレートまで拾ってしまい、並び順次第で取り違える。
+// まず厳密な一致(「大当たり」を除いた上での一致)を試し、
+// 見つからない場合だけ従来通りの部分一致にフォールバックする。
+function pickCandidates(presets: PresetObject[], category: string, label: string): PresetObject[] {
+  const inCat = presets.filter((p) => matchesCategory(p, category));
+  if (label === "当たり") {
+    const strict = inCat.filter((p) => p.name.replace(/大当たり/g, "").includes("当たり"));
+    if (strict.length > 0) return strict;
+  }
+  return inCat.filter((p) => p.name.includes(label));
 }

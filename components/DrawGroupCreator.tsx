@@ -15,40 +15,10 @@ import {
 } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
 import { categoryHasBothFormats, flatFormatLabel, resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
+import { quickFillLabels } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
 
-const QUICK_FILL: Record<string, string[]> = {
-  amida: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  box: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  darts: ["大当たり", "当たり", "クーポン", "はずれ", "参加賞"],
-  garagara: ["大当たり", "当たり", "クーポン", "はずれ", "参加賞"],
-  omikuji: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  scratch: ["大当たり", "当たり", "クーポン", "はずれ", "参加賞"],
-  roulette: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  dice: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  treasure: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  slot: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  gacha: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  mallet: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  cat: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  daruma: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  lantern: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  firework: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  airlottery: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  fan: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  pachinko: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  jet: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  rocket: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  meteor: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  shuriken: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  dragon: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  iaido: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  ufo: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  cannon: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-  thunder: ["当たり", "大当たり", "クーポン", "はずれ", "参加賞"],
-  punch: ["1等", "2等", "3等", "4等", "5等", "6等", "参加賞"],
-};
 
 interface Row {
   id: string;
@@ -142,7 +112,7 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
   function selectCategory(category: string, format: FormatPref = null) {
     setSelectedCategory(category);
     setSelectedFormat(format);
-    const labels = QUICK_FILL[category] ?? [];
+    const labels = quickFillLabels(presets, category);
     setRows(
       labels.map((label) => {
         const row = newRow(label);

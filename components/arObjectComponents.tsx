@@ -167,24 +167,63 @@ export function registerAlphaVideoComponent(AFRAME: any) {
     schema: { src: { type: "string" } },
     init() {
       const THREE = AFRAME.THREE;
+      const src = this.data.src;
       const video = document.createElement("video");
-      video.src = this.data.src;
-      video.crossOrigin = "anonymous";
-      video.loop = true;
+      // iOS Safari / Android Chrome でインライン自動再生させるための必須条件。
+      // muted + playsinline + autoplay が揃っていないと play() が拒否され、
+      // テクスチャが更新されないまま「何も表示されない」状態になる。
       video.muted = true;
+      video.defaultMuted = true;
+      video.setAttribute("muted", "");
+      video.loop = true;
+      video.autoplay = true;
+      video.setAttribute("autoplay", "");
       video.playsInline = true;
       video.setAttribute("webkit-playsinline", "true");
       video.setAttribute("playsinline", "true");
+      video.preload = "auto";
+      // 同一オリジン配信ならcrossOriginは不要。別ドメインから配信していて
+      // CORSヘッダが無い場合、crossOrigin="anonymous"を付けたままだと
+      // 動画自体が読み込めずに無表示になるため、失敗したら外して1度だけ再試行する。
+      let corsRetried = false;
+      try {
+        if (new URL(src, window.location.href).origin !== window.location.origin) {
+          video.crossOrigin = "anonymous";
+        }
+      } catch (e) {
+        /* 相対URLなど。同一オリジン扱いでよい */
+      }
+      video.src = src;
       this.video = video;
 
-      const tryPlay = () => video.play().catch(() => {});
-      tryPlay();
-      const resumeOnGesture = () => {
-        tryPlay();
+      const tryPlay = () => {
+        const p = video.play();
+        if (p && typeof p.catch === "function") p.catch(() => {});
       };
-      document.addEventListener("touchend", resumeOnGesture, { once: true });
-      document.addEventListener("click", resumeOnGesture, { once: true });
+      // 自動再生がブロックされている間は、読み込みの節目とユーザー操作の
+      // どちらでも再生を試みる(1回きりにすると、失敗したまま諦めてしまう)。
+      const resumeOnGesture = () => tryPlay();
+      video.addEventListener("loadeddata", tryPlay);
+      video.addEventListener("canplay", tryPlay);
+      video.addEventListener("error", () => {
+        if (corsRetried || !video.crossOrigin) return;
+        corsRetried = true;
+        video.removeAttribute("crossorigin");
+        video.crossOrigin = null as any;
+        video.src = src;
+        video.load();
+        tryPlay();
+      });
+      document.addEventListener("touchend", resumeOnGesture);
+      document.addEventListener("click", resumeOnGesture);
+      video.addEventListener("playing", () => {
+        document.removeEventListener("touchend", resumeOnGesture);
+        document.removeEventListener("click", resumeOnGesture);
+      });
       this._resumeOnGesture = resumeOnGesture;
+      this._tryPlay = tryPlay;
+      video.load();
+      tryPlay();
 
       const texture = new THREE.VideoTexture(video);
       texture.minFilter = THREE.LinearFilter;
