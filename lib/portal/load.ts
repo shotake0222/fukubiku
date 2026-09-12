@@ -1,5 +1,16 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { emptyBlocks, type PortalBlockKind, type PortalData, type PortalTemplate } from "./types";
+import {
+  emptyBlocks,
+  resolveDesign,
+  resolveSections,
+  type PortalBlockKind,
+  type PortalData,
+  type PortalDesign,
+  type PortalNavLink,
+  type PortalSection,
+  type PortalSnsLink,
+  type PortalTemplate,
+} from "./types";
 import type { AttendPortal, AttendPortalBlock, AttendRally } from "@/lib/types";
 
 /** ラリーの配布用URLを引く。埋め込み用ではなく、必ず単体で開けるURLを使う。 */
@@ -27,6 +38,23 @@ async function rallyUrlFor(
   return rally ? `${origin}/r/${(rally as Pick<AttendRally, "hash">).hash}` : null;
 }
 
+/** JSONB列は何でも入りうるので、描画前に形だけ確かめる */
+function asNav(v: unknown): PortalNavLink[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is PortalNavLink => !!x && typeof x === "object")
+    .map((x) => ({ label: String((x as any).label ?? ""), url: String((x as any).url ?? "") }))
+    .filter((x) => x.label && x.url);
+}
+
+function asSns(v: unknown): PortalSnsLink[] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .filter((x): x is PortalSnsLink => !!x && typeof x === "object")
+    .map((x) => ({ kind: (x as any).kind, url: String((x as any).url ?? "") }))
+    .filter((x) => x.kind && x.url);
+}
+
 export function toPortalData(
   p: AttendPortal,
   blockRows: AttendPortalBlock[],
@@ -49,8 +77,14 @@ export function toPortalData(
     });
   }
 
+  const template = (p.template as PortalTemplate) ?? "kanko";
+
   return {
-    template: (p.template as PortalTemplate) ?? "kanko",
+    template,
+    design: resolveDesign(template, p.design as Partial<PortalDesign> | null),
+    sections: resolveSections(template, p.sections as PortalSection[] | null),
+    nav: asNav(p.nav),
+    sns: asSns(p.sns),
     status: p.status,
     endedMessage: p.ended_message,
     endedLinkUrl: p.ended_link_url,

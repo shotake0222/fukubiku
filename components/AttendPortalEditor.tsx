@@ -4,8 +4,31 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { PORTAL_TEMPLATES } from "@/lib/portal/types";
-import type { PortalBlockKind, PortalTemplate } from "@/lib/portal/types";
+import {
+  COLOR_PRESETS,
+  DENSITY_OPTIONS,
+  FONT_OPTIONS,
+  HERO_OPTIONS,
+  PORTAL_TEMPLATES,
+  RADIUS_OPTIONS,
+  SECTION_BLOCK,
+  SECTION_LABELS,
+  SNS_OPTIONS,
+  TONE_OPTIONS,
+  emptyBlocks,
+  resolveDesign,
+  resolveSections,
+} from "@/lib/portal/types";
+import type {
+  PortalBlockKind,
+  PortalData,
+  PortalDesign,
+  PortalNavLink,
+  PortalSection,
+  PortalSnsLink,
+  PortalTemplate,
+} from "@/lib/portal/types";
+import PortalPreview from "@/components/PortalPreview";
 import type { AttendPortal, AttendPortalBlock, AttendProject, AttendRally } from "@/lib/types";
 
 const ASSET_BUCKET = "assets";
@@ -22,7 +45,7 @@ const BLOCK_FIELDS: Record<
   { label: string; title: string; body?: string; meta?: string; image?: boolean; link?: boolean; badge?: string }
 > = {
   pick: { label: "見どころ／ステップ／キャラクター", title: "見出し", body: "説明", image: true },
-  spot: { label: "スポット・店舗・ロケ地", title: "名前", body: "説明", meta: "補足（営業時間・フロア・話数など）", image: true, badge: "ラベル（スタンプ①など）" },
+  spot: { label: "スポット・店舗・ロケ地", title: "名前", body: "説明", meta: "補足（営業時間・フロア・話数など）", image: true, link: true, badge: "ラベル（スタンプ①など）" },
   banner: { label: "バナー", title: "見出し", meta: "小さい説明", image: true, link: true },
   news: { label: "お知らせ", title: "日付・ラベル", body: "本文" },
   faq: { label: "よくある質問", title: "質問", body: "回答" },
@@ -105,6 +128,84 @@ function Field({
           className="input w-full"
         />
       )}
+      {hint && <span className="block text-[11px] text-slate-400">{hint}</span>}
+    </label>
+  );
+}
+
+/** 選択肢を横並びのボタンで選ばせる。数値でない設定はすべてこれ。 */
+function Choice<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: T; label: string; hint?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  const current = options.find((o) => o.value === value);
+  return (
+    <div className="space-y-1">
+      <span className="text-xs font-medium text-slate-600">{label}</span>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => onChange(o.value)}
+            className={`text-xs px-3 py-1.5 rounded-full border ${
+              value === o.value ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+            }`}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {current?.hint && <span className="block text-[11px] text-slate-400">{current.hint}</span>}
+    </div>
+  );
+}
+
+/** 数値の調整。つまみを動かすと右のプレビューがそのまま変わる。 */
+function Slider({
+  label,
+  hint,
+  min,
+  max,
+  step,
+  unit,
+  value,
+  onChange,
+}: {
+  label: string;
+  hint?: string;
+  min: number;
+  max: number;
+  step: number;
+  unit: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <label className="block space-y-1">
+      <span className="text-xs font-medium text-slate-600">
+        {label}
+        <span className="ml-2 font-mono text-slate-400">
+          {value}
+          {unit}
+        </span>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full"
+      />
       {hint && <span className="block text-[11px] text-slate-400">{hint}</span>}
     </label>
   );
@@ -234,6 +335,19 @@ export default function AttendPortalEditor({
     ended_link_label: portal.ended_link_label ?? "",
   });
 
+  const [design, setDesign] = useState<PortalDesign>(
+    resolveDesign(portal.template as PortalTemplate, portal.design as Partial<PortalDesign> | null)
+  );
+  const [sections, setSections] = useState<PortalSection[]>(
+    resolveSections(portal.template as PortalTemplate, portal.sections as PortalSection[] | null)
+  );
+  const [nav, setNav] = useState<PortalNavLink[]>(
+    Array.isArray(portal.nav) ? (portal.nav as PortalNavLink[]) : []
+  );
+  const [sns, setSns] = useState<PortalSnsLink[]>(
+    Array.isArray(portal.sns) ? (portal.sns as PortalSnsLink[]) : []
+  );
+
   const [drafts, setDrafts] = useState<BlockDraft[]>(blocks.map(toDraft));
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -247,6 +361,30 @@ export default function AttendPortalEditor({
 
   function set<K extends keyof typeof f>(k: K, v: (typeof f)[K]) {
     setF((prev) => ({ ...prev, [k]: v }));
+  }
+
+  // 用途を変えたら、その用途の既定の構成・見た目に寄せる。
+  // 手で調整した内容が残ったままだと、選び直した意味がなくなるため。
+  function changeTemplate(t: PortalTemplate) {
+    set("template", t);
+    setSections(resolveSections(t, null));
+    setDesign(resolveDesign(t, null));
+  }
+
+  function setDesignValue<K extends keyof PortalDesign>(k: K, v: PortalDesign[K]) {
+    setDesign((prev) => ({ ...prev, [k]: v }));
+  }
+  function moveSection(index: number, delta: number) {
+    setSections((prev) => {
+      const t = index + delta;
+      if (t < 0 || t >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[t]] = [next[t], next[index]];
+      return next;
+    });
+  }
+  function updateSection(key: string, patch: Partial<PortalSection>) {
+    setSections((prev) => prev.map((x) => (x.key === key ? { ...x, ...patch } : x)));
   }
   function updateBlock(id: string, patch: Partial<BlockDraft>) {
     setDrafts((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
@@ -268,6 +406,62 @@ export default function AttendPortalEditor({
       return prev.map((d) => (d.id === a.id ? b : d.id === b.id ? a : d));
     });
   }
+
+  // いま編集中の内容を、そのまま公開ページと同じ描画処理に渡せる形にする。
+  // 保存を挟まないので、入力した瞬間に横のプレビューへ反映される。
+  const previewData: PortalData = useMemo(() => {
+    const b = emptyBlocks();
+    for (const d of drafts) {
+      if (!d.enabled) continue;
+      if (!b[d.kind]) continue;
+      b[d.kind].push({
+        id: d.id,
+        kind: d.kind,
+        title: d.title || null,
+        body: d.body || null,
+        meta: d.meta || null,
+        imageUrl: d.image_url,
+        linkUrl: d.link_url || null,
+        badge: d.badge || null,
+      });
+    }
+    return {
+      template: f.template,
+      status: f.status,
+      endedMessage: f.ended_message || null,
+      endedLinkUrl: f.ended_link_url || null,
+      endedLinkLabel: f.ended_link_label || null,
+      brand: f.brand_color,
+      brandDark: f.brand_color_dark,
+      accent: f.accent_color || f.brand_color,
+      logoUrl: f.logo_url,
+      logoText: f.logo_text || null,
+      siteTitle: f.site_title || "スタンプラリー",
+      siteDescription: f.site_description || null,
+      ogImageUrl: f.og_image_url,
+      heroImageUrl: f.hero_image_url,
+      heroEyebrow: f.hero_eyebrow || null,
+      heroTitle: f.hero_title || null,
+      heroText: f.hero_text || null,
+      // プレビューでは参加ボタンの見た目だけ確認できればよい
+      arUrl: f.rally_id || f.custom_ar_url ? `${siteOrigin}/r/preview` : null,
+      arHeading: f.ar_heading || "スタンプラリーに参加する",
+      arText: f.ar_text || null,
+      arButtonLabel: f.ar_button_label || "いますぐ始める",
+      statusLine: f.status_line || null,
+      ownerName: f.owner_name || null,
+      ownerAddress: f.owner_address || null,
+      privacyUrl: f.privacy_url || null,
+      termsUrl: f.terms_url || null,
+      contactUrl: f.contact_url || null,
+      copyrightText: f.copyright_text || null,
+      design,
+      sections,
+      nav: nav.filter((n) => n.label.trim() && n.url.trim()),
+      sns: sns.filter((x) => x.url.trim()),
+      blocks: b,
+    };
+  }, [f, design, sections, nav, sns, drafts, siteOrigin]);
 
   async function handleSave() {
     setSaving(true);
@@ -307,6 +501,10 @@ export default function AttendPortalEditor({
         ended_message: f.ended_message || null,
         ended_link_url: f.ended_link_url || null,
         ended_link_label: f.ended_link_label || null,
+        design,
+        sections,
+        nav: nav.filter((n) => n.label.trim() && n.url.trim()),
+        sns: sns.filter((x) => x.url.trim()),
       })
       .eq("id", portal.id);
 
@@ -364,7 +562,8 @@ export default function AttendPortalEditor({
   }
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="xl:flex xl:gap-6 xl:items-start">
+      <div className="max-w-3xl space-y-6 xl:flex-1 xl:min-w-0">
       <div className="flex items-start justify-between gap-4">
         <div>
           <Link
@@ -436,7 +635,7 @@ export default function AttendPortalEditor({
               <button
                 key={t.value}
                 type="button"
-                onClick={() => set("template", t.value)}
+                onClick={() => changeTemplate(t.value)}
                 className={`rounded-lg border px-3 py-2 text-left ${
                   f.template === t.value ? "border-slate-900 bg-slate-50" : "border-slate-200"
                 }`}
@@ -483,6 +682,35 @@ export default function AttendPortalEditor({
       {/* ブランド */}
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
         <h2 className="font-semibold">ロゴと配色</h2>
+        <div className="space-y-1">
+          <span className="text-xs font-medium text-slate-600">配色を選ぶ（3色まとめて変わります）</span>
+          <div className="flex flex-wrap gap-2">
+            {COLOR_PRESETS.map((c) => {
+              const active = f.brand_color === c.brand && f.brand_color_dark === c.brandDark;
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => {
+                    set("brand_color", c.brand);
+                    set("brand_color_dark", c.brandDark);
+                    set("accent_color", c.accent);
+                  }}
+                  className={`flex items-center gap-2 text-xs pl-1.5 pr-3 py-1 rounded-full border ${
+                    active ? "border-slate-900 bg-slate-900 text-white" : "hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="flex">
+                    <span className="w-3 h-3 rounded-l-full" style={{ background: c.brand }} />
+                    <span className="w-3 h-3" style={{ background: c.brandDark }} />
+                    <span className="w-3 h-3 rounded-r-full" style={{ background: c.accent }} />
+                  </span>
+                  {c.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
         <div className="grid grid-cols-3 gap-4">
           {([
             ["brand_color", "主役の色"],
@@ -510,6 +738,258 @@ export default function AttendPortalEditor({
           storagePrefix={`attend/portal/${portal.id}/logo`}
         />
         <Field label="ロゴの文字" value={f.logo_text} onChange={(v) => set("logo_text", v)} />
+      </section>
+
+      {/* デザイン調整 */}
+      <section className="bg-white rounded-xl shadow p-6 space-y-5">
+        <div>
+          <h2 className="font-semibold">デザイン調整</h2>
+          <p className="text-xs text-slate-400">
+            選んだ用途の見た目を土台にして、ここで細部を詰めます。右のプレビューに即座に反映されます。
+          </p>
+        </div>
+
+        <Choice
+          label="書体"
+          options={FONT_OPTIONS}
+          value={design.font}
+          onChange={(v) => setDesignValue("font", v)}
+        />
+        <Choice
+          label="角の丸み"
+          options={RADIUS_OPTIONS}
+          value={design.radius}
+          onChange={(v) => setDesignValue("radius", v)}
+        />
+        <Choice
+          label="余白の詰め方"
+          options={DENSITY_OPTIONS}
+          value={design.density}
+          onChange={(v) => setDesignValue("density", v)}
+        />
+        <Choice
+          label="トップの見せ方"
+          options={HERO_OPTIONS}
+          value={design.heroStyle}
+          onChange={(v) => setDesignValue("heroStyle", v)}
+        />
+        <Choice
+          label="ページの地の色"
+          options={TONE_OPTIONS}
+          value={design.tone}
+          onChange={(v) => setDesignValue("tone", v)}
+        />
+
+        <div className="grid sm:grid-cols-3 gap-4">
+          <Slider
+            label="写真の上の暗幕"
+            hint="文字が読みにくいときに上げる"
+            min={0}
+            max={80}
+            step={5}
+            unit="%"
+            value={design.heroOverlay}
+            onChange={(v) => setDesignValue("heroOverlay", v)}
+          />
+          <Slider
+            label="トップの高さ"
+            min={240}
+            max={720}
+            step={20}
+            unit="px"
+            value={design.heroHeight}
+            onChange={(v) => setDesignValue("heroHeight", v)}
+          />
+          <Slider
+            label="見出しの大きさ"
+            min={80}
+            max={130}
+            step={5}
+            unit="%"
+            value={design.headingScale}
+            onChange={(v) => setDesignValue("headingScale", v)}
+          />
+        </div>
+
+        <div className="flex flex-wrap gap-5 border-t pt-4">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={design.stickyCta}
+              onChange={(e) => setDesignValue("stickyCta", e.target.checked)}
+            />
+            スマホの下に参加ボタンを固定する
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={design.stickyHeader}
+              onChange={(e) => setDesignValue("stickyHeader", e.target.checked)}
+            />
+            ヘッダーを追従させる
+          </label>
+        </div>
+      </section>
+
+      {/* セクション構成 */}
+      <section className="bg-white rounded-xl shadow p-6 space-y-3">
+        <div>
+          <h2 className="font-semibold">ページの構成</h2>
+          <p className="text-xs text-slate-400">
+            並び順・表示/非表示・見出しを変えられます。中身が空のセクションは、公開時には出ません。
+          </p>
+        </div>
+        <div className="divide-y border rounded-lg">
+          {sections.map((sec, i) => {
+            const kind = SECTION_BLOCK[sec.key];
+            const count = kind ? drafts.filter((d) => d.kind === kind && d.enabled).length : null;
+            return (
+              <div key={sec.key} className={`p-3 space-y-2 ${sec.enabled ? "" : "bg-slate-50"}`}>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={sec.enabled}
+                    onChange={(e) => updateSection(sec.key, { enabled: e.target.checked })}
+                  />
+                  <span className={`text-sm flex-1 ${sec.enabled ? "" : "text-slate-400"}`}>
+                    {SECTION_LABELS[sec.key]}
+                    {count !== null && (
+                      <span className={`ml-2 text-[11px] ${count ? "text-slate-400" : "text-amber-600"}`}>
+                        {count ? `${count}件` : "中身が空"}
+                      </span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => moveSection(i, -1)}
+                    disabled={i === 0}
+                    className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => moveSection(i, 1)}
+                    disabled={i === sections.length - 1}
+                    className="text-xs px-2 py-1 rounded border disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                </div>
+                {sec.enabled && (sec.eyebrow !== "" || sec.heading !== "") && (
+                  <div className="grid grid-cols-3 gap-2 pl-6">
+                    <input
+                      value={sec.eyebrow}
+                      onChange={(e) => updateSection(sec.key, { eyebrow: e.target.value })}
+                      placeholder="英字ラベル"
+                      className="input text-xs"
+                    />
+                    <input
+                      value={sec.heading}
+                      onChange={(e) => updateSection(sec.key, { heading: e.target.value })}
+                      placeholder="見出し"
+                      className="input text-xs col-span-2"
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* リンク */}
+      <section className="bg-white rounded-xl shadow p-6 space-y-5">
+        <div>
+          <h2 className="font-semibold">リンク</h2>
+          <p className="text-xs text-slate-400">
+            ヘッダーのメニューとSNSです。フッターの規約・問い合わせは下の「サイト情報」にあります。
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <span className="text-xs font-medium text-slate-600">ヘッダーのメニュー</span>
+          {nav.map((n, i) => (
+            <div key={i} className="flex gap-2">
+              <input
+                value={n.label}
+                onChange={(e) =>
+                  setNav((p) => p.map((x, j) => (i === j ? { ...x, label: e.target.value } : x)))
+                }
+                placeholder="表示名（例: アクセス）"
+                className="input w-40"
+              />
+              <input
+                value={n.url}
+                onChange={(e) =>
+                  setNav((p) => p.map((x, j) => (i === j ? { ...x, url: e.target.value } : x)))
+                }
+                placeholder="https://..."
+                className="input flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => setNav((p) => p.filter((_, j) => j !== i))}
+                className="text-xs text-red-600 hover:underline"
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setNav((p) => [...p, { label: "", url: "" }])}
+            className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50"
+          >
+            + メニューを追加
+          </button>
+          <p className="text-[11px] text-slate-400">スマホ幅では省略されます（参加ボタンを優先するため）。</p>
+        </div>
+
+        <div className="space-y-2 border-t pt-4">
+          <span className="text-xs font-medium text-slate-600">SNS・公式サイト（フッターに出ます）</span>
+          {sns.map((x, i) => (
+            <div key={i} className="flex gap-2">
+              <select
+                value={x.kind}
+                onChange={(e) =>
+                  setSns((p) =>
+                    p.map((y, j) => (i === j ? { ...y, kind: e.target.value as PortalSnsLink["kind"] } : y))
+                  )
+                }
+                className="input w-40"
+              >
+                {SNS_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={x.url}
+                onChange={(e) =>
+                  setSns((p) => p.map((y, j) => (i === j ? { ...y, url: e.target.value } : y)))
+                }
+                placeholder="https://..."
+                className="input flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => setSns((p) => p.filter((_, j) => j !== i))}
+                className="text-xs text-red-600 hover:underline"
+              >
+                削除
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSns((p) => [...p, { kind: "x", url: "" }])}
+            className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50"
+          >
+            + SNSを追加
+          </button>
+        </div>
       </section>
 
       {/* ヒーロー */}
@@ -676,6 +1156,14 @@ export default function AttendPortalEditor({
           この受け皿サイトを削除
         </button>
       </div>
+      </div>
+
+      {/* 編集しながら、その場で見た目を確認する。
+          色や余白の詰め方は、実際の幅で見ないと判断できないため、
+          スマホ/タブレット/PCを切り替えられるようにしている。 */}
+      <aside className="hidden xl:block w-[520px] flex-shrink-0 sticky top-4">
+        <PortalPreview data={previewData} publicUrl={publicUrl} />
+      </aside>
     </div>
   );
 }

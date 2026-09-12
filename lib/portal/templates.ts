@@ -17,7 +17,7 @@ import {
   sticky,
   type Ctx,
 } from "./render";
-import type { PortalTemplate } from "./types";
+import type { PortalSection, PortalTemplate, SectionKey } from "./types";
 
 const SANS = '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif';
 const SERIF = '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif';
@@ -25,8 +25,10 @@ const SERIF = '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif';
 /** テンプレート共通のヒーロー（背景画像＋文字） */
 function heroCover(ctx: Ctx): string {
   const { d } = ctx;
+  // 暗幕の濃さは管理画面から調整できる。写真が明るくて文字が読めない、の定番対処。
+  const o = Math.max(0, Math.min(80, d.design.heroOverlay)) / 100;
   const bg = d.heroImageUrl
-    ? `background-image:linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.6)),url('${esc(d.heroImageUrl)}')`
+    ? `background-image:linear-gradient(180deg,rgba(0,0,0,${(o * 0.35).toFixed(2)}),rgba(0,0,0,${o.toFixed(2)})),url('${esc(d.heroImageUrl)}')`
     : "";
   return `<section class="hero" style="${bg}">
   <div class="hero-inner">
@@ -103,83 +105,44 @@ function notesSection(ctx: Ctx, heading: string): string {
 }
 
 // ============================================================
-// テンプレートごとの並び順
+// セクションの描画。どれをどの順で出すかは管理画面で決める
+// (以前はテンプレートごとに並び順を固定していた)
 // ============================================================
-export const TEMPLATE_SECTIONS: Record<PortalTemplate, (ctx: Ctx) => string> = {
-  kanko: (c) =>
-    [
-      header(c),
-      heroCover(c),
-      arBand(c),
-      picks(c, "HIGHLIGHTS", "この街の見どころ"),
-      spots(c, "SPOTS", "スタンプスポット"),
-      banners(c, "PICK UP", "おすすめ・お得な情報"),
-      newsAndOutline(c),
-      footer(c),
-      sticky(c),
-    ].join("\n"),
+function heroFor(ctx: Ctx): string {
+  const style = ctx.d.design.heroStyle;
+  if (style === "split") return heroSplit(ctx);
+  if (style === "band") return heroNow(ctx);
+  return heroCover(ctx);
+}
 
-  shotengai: (c) =>
-    [
-      header(c),
-      heroCover(c),
-      arBand(c),
-      campaignBar(c),
-      spots(c, "SHOPS", "参加店舗"),
-      banners(c, "INFORMATION", "おすすめ・関連情報"),
-      outlineOnly(c, "OUTLINE", "開催概要"),
-      footer(c),
-      sticky(c),
-    ].join("\n"),
-
-  shisetsu: (c) =>
-    [
-      header(c),
-      statusLine(c),
-      heroSplit(c),
-      arBand(c),
-      picks(c, "HOW TO PLAY", "遊び方"),
-      spots(c, "SPOTS", "館内スポット"),
-      outlineOnly(c, "SCHEDULE", "開催概要"),
-      banners(c, "INFORMATION", "館内のご案内"),
-      notesSection(c, "ご参加にあたって"),
-      footer(c),
-      sticky(c),
-    ].join("\n"),
-
-  seichi: (c) =>
-    [
-      header(c),
-      heroCover(c),
-      picks(c, "CHARACTERS", "登場キャラクター"),
-      arBand(c),
-      spots(c, "LOCATIONS", "巡礼スポット"),
-      banners(c, "INFORMATION", "関連情報"),
-      notesSection(c, "巡礼にあたってのお願い"),
-      footer(c),
-      sticky(c),
-    ].join("\n"),
-
-  jousetsu: (c) =>
-    [
-      header(c),
-      heroNow(c),
-      outlineOnly(c, "STATUS", "開催状況"),
-      spots(c, "NEW SPOT", "今月の追加スポット"),
-      chapters(c, "CHAPTERS", "これまでの章"),
-      banners(c, "INFORMATION", "園内のご案内"),
-      faq(c, "FAQ", "よくあるご質問"),
-      footer(c),
-      sticky(c),
-    ].join("\n"),
+export const SECTION_RENDERERS: Record<SectionKey, (ctx: Ctx, s: PortalSection) => string> = {
+  hero: (c) => heroFor(c),
+  status: (c) => statusLine(c),
+  campaign: (c) => campaignBar(c),
+  ar: (c) => arBand(c),
+  picks: (c, s) => picks(c, s.eyebrow, s.heading),
+  spots: (c, s) => spots(c, s.eyebrow, s.heading),
+  chapters: (c, s) => chapters(c, s.eyebrow, s.heading),
+  banners: (c, s) => banners(c, s.eyebrow, s.heading),
+  news: (c, s) => newsSection(c, s.eyebrow, s.heading),
+  outline: (c, s) => outlineOnly(c, s.eyebrow, s.heading),
+  faq: (c, s) => faq(c, s.eyebrow, s.heading),
+  notes: (c, s) => notesSection(c, s.heading),
 };
+
+/** お知らせ単体。観光テンプレートで開催概要と横並びにするためのクラスは残す */
+function newsSection(ctx: Ctx, eyebrow: string, heading: string): string {
+  const n = news(ctx, eyebrow, heading);
+  if (!n) return "";
+  return `<section class="sec info-sec"><div class="wrap">${n}</div></section>`;
+}
 
 // ============================================================
 // テンプレートごとの見た目
 // 共通クラスに対して、色・書体・角の丸み・影を上書きする
 // ============================================================
 const KANKO = `
-body{background:#fff;color:#33291f;font-family:${SANS}}
+body{background:var(--page-bg,#fff);color:var(--page-ink,#33291f);font-family:var(--font,${SANS})}
 .ph{background:linear-gradient(135deg,#e8eeec,#d8e3e0);color:#9aa8a4}
 .hd{background:rgba(255,255,255,.94);backdrop-filter:blur(8px);border-bottom:1px solid #e3e8e6}
 .logo-mark{background:var(--brand);color:#fff}
@@ -188,12 +151,12 @@ body{background:#fff;color:#33291f;font-family:${SANS}}
   background-color:#9fbdb4}
 .hero-inner{max-width:1000px;margin:0 auto;padding:0 20px 48px;color:#fff;width:100%}
 .hero-eyebrow{font-size:12px;letter-spacing:.35em;margin:0 0 14px;opacity:.92}
-.hero h1{font-family:${SERIF};font-size:44px;line-height:1.3;margin:0 0 14px;font-weight:800;text-shadow:0 2px 16px rgba(0,0,0,.3)}
+.hero h1{font-family:var(--font-head,${SERIF});font-size:44px;line-height:1.3;margin:0 0 14px;font-weight:800;text-shadow:0 2px 16px rgba(0,0,0,.3)}
 .hero-text{margin:0;font-size:15px;max-width:34em;opacity:.95}
 .ar{background:var(--brand);color:#fff;padding:44px 0}
 .ar .btn{background:#fff;color:var(--brand-dark);box-shadow:0 8px 22px rgba(0,0,0,.18)}
 .sec-head span{color:var(--brand)}
-.sec-head h2{font-family:${SERIF}}
+.sec-head h2{font-family:var(--font-head,${SERIF})}
 .card{background:#f6f8f7;border:1px solid #e3e8e6;border-radius:16px}
 .spots{background:#f6f8f7;border-top:1px solid #e3e8e6;border-bottom:1px solid #e3e8e6}
 .spot{border-bottom:1px dashed #e3e8e6}
@@ -216,7 +179,7 @@ body{background:#fff;color:#33291f;font-family:${SANS}}
 `;
 
 const SHOTENGAI = `
-body{background:#fffdf7;color:#2e2a20;font-family:${SANS}}
+body{background:var(--page-bg,#fffdf7);color:var(--page-ink,#2e2a20);font-family:var(--font,${SANS})}
 .ph{background:repeating-linear-gradient(45deg,#f0e6d2 0 10px,#e8dcc4 10px 20px);color:#b3a68c}
 .hd{background:var(--brand);color:#fff;box-shadow:0 2px 0 rgba(0,0,0,.12)}
 .logo{color:#fff}
@@ -266,7 +229,7 @@ body{background:#fffdf7;color:#2e2a20;font-family:${SANS}}
 `;
 
 const SHISETSU = `
-body{background:#fff;color:#14243f;font-family:${SANS}}
+body{background:var(--page-bg,#fff);color:var(--page-ink,#14243f);font-family:var(--font,${SANS})}
 .ph{background:linear-gradient(135deg,#e4ecf4,#cfdcea);color:#94a7bd}
 .hd{background:#fff;border-bottom:1px solid #dbe4ee}
 .logo-mark{background:var(--brand);color:#fff;border-radius:8px}
@@ -310,7 +273,7 @@ body{background:#fff;color:#14243f;font-family:${SANS}}
 `;
 
 const SEICHI = `
-body{background:#0b0f1a;color:#f2f5ff;font-family:${SANS}}
+body{background:var(--page-bg,#0b0f1a);color:var(--page-ink,#f2f5ff);font-family:var(--font,${SANS})}
 .ph{background:linear-gradient(135deg,#1b2338,#2a3550);color:#5b6b8c}
 .hd{background:rgba(11,15,26,.88);backdrop-filter:blur(10px);border-bottom:1px solid #243049}
 .logo-mark{background:var(--brand);color:#fff}
@@ -356,7 +319,7 @@ body{background:#0b0f1a;color:#f2f5ff;font-family:${SANS}}
 `;
 
 const JOUSETSU = `
-body{background:#fff;color:#1e2c1c;font-family:${SANS}}
+body{background:var(--page-bg,#fff);color:var(--page-ink,#1e2c1c);font-family:var(--font,${SANS})}
 .ph{background:linear-gradient(135deg,#e5eee1,#d2e0cc);color:#9db195}
 .hd{background:#fff;border-bottom:1px solid #dbe6d6}
 .logo-mark{background:var(--brand);color:#fff;border-radius:50%}

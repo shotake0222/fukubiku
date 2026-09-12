@@ -1,5 +1,11 @@
-import { PORTAL_TEMPLATES, type PortalBlock, type PortalData } from "./types";
-import { TEMPLATE_CSS, TEMPLATE_SECTIONS } from "./templates";
+import {
+  PORTAL_TEMPLATES,
+  SNS_OPTIONS,
+  type PortalBlock,
+  type PortalData,
+  type PortalDesign,
+} from "./types";
+import { SECTION_RENDERERS, TEMPLATE_CSS } from "./templates";
 
 export function esc(v: string | null | undefined): string {
   if (v == null) return "";
@@ -97,6 +103,7 @@ export function spots(ctx: Ctx, eyebrow: string, heading: string): string {
         <h3>${esc(b.title)}</h3>
         ${b.body ? `<p>${nl2br(b.body)}</p>` : ""}
         ${b.meta ? `<div class="spot-meta">${nl2br(b.meta)}</div>` : ""}
+        ${b.linkUrl ? `<a class="spot-link"${linkAttrs(b.linkUrl)}>くわしく見る</a>` : ""}
       </div>
     </article>`
     )
@@ -176,9 +183,16 @@ export function header(ctx: Ctx): string {
   const logo = d.logoUrl
     ? `<img src="${esc(d.logoUrl)}" alt="${esc(d.logoText || d.siteTitle)}" class="logo-img">`
     : `<span class="logo-mark">${esc((d.logoText || d.siteTitle).slice(0, 1))}</span><span>${esc(d.logoText || d.siteTitle)}</span>`;
-  return `<header class="hd">
+  const nav = d.nav.length
+    ? `<nav class="hd-nav">${d.nav
+        .map((n) => `<a${linkAttrs(n.url)}>${esc(n.label)}</a>`)
+        .join("")}</nav>`
+    : "";
+  const stick = d.design.stickyHeader ? "" : " hd-static";
+  return `<header class="hd${stick}">
   <div class="hd-inner">
     <a class="logo" href="#">${logo}</a>
+    ${nav}
     ${d.arUrl ? `<a class="hd-go" href="${esc(d.arUrl)}">${esc(d.arButtonLabel)}</a>` : ""}
   </div>
 </header>`;
@@ -193,8 +207,17 @@ export function footer(ctx: Ctx): string {
   ]
     .filter(Boolean)
     .join("");
+  const sns = d.sns.length
+    ? `<div class="ft-sns">${d.sns
+        .map((x) => {
+          const label = SNS_OPTIONS.find((o) => o.value === x.kind)?.label ?? x.kind;
+          return `<a${linkAttrs(x.url)}>${esc(label)}</a>`;
+        })
+        .join("")}</div>`
+    : "";
   return `<footer class="ft">
   <div class="wrap">
+    ${sns}
     ${d.ownerName ? `<strong>${esc(d.ownerName)}</strong>` : ""}
     ${d.ownerAddress ? `<br>${nl2br(d.ownerAddress)}` : ""}
     ${links ? `<div class="ft-links">${links}</div>` : ""}
@@ -204,7 +227,7 @@ export function footer(ctx: Ctx): string {
 }
 
 export function sticky(ctx: Ctx): string {
-  if (!ctx.d.arUrl) return "";
+  if (!ctx.d.arUrl || !ctx.d.design.stickyCta) return "";
   return `<div class="sticky"><a href="${esc(ctx.d.arUrl)}">${esc(ctx.d.arButtonLabel)}</a></div>`;
 }
 
@@ -264,12 +287,54 @@ a{color:inherit}
 .chapter h3{margin:4px 0 6px;font-size:15.5px}
 .chapter p{margin:0;font-size:12.5px;opacity:.8}
 .chapter-flag{position:absolute;top:10px;right:10px;font-size:11px;font-weight:800;padding:4px 10px;border-radius:999px}
+/* ヒーローは3形式から選べる。どのテンプレートで選んでも成立するよう、
+   共通の下地をここで用意する（テンプレート側のCSSが後ろに来るので、
+   用途ごとの作り込みがあればそちらが勝つ） */
+.hero{min-height:420px;display:flex;align-items:flex-end;
+  background-size:cover;background-position:center;background-color:var(--brand-dark)}
+.hero-inner{max-width:1000px;margin:0 auto;padding:0 20px 46px;width:100%;color:#fff}
+.hero h1{font-size:40px;line-height:1.3;margin:0 0 14px;font-weight:800}
+.hero .hero-eyebrow{font-size:12px;letter-spacing:.3em;margin:0 0 12px;opacity:.92}
+.hero .hero-text{margin:0;font-size:15px;max-width:34em;opacity:.95}
+.hero-split{max-width:1000px;margin:0 auto;padding:52px 20px;
+  display:grid;grid-template-columns:1fr 1fr;gap:34px;align-items:center}
+.hero-split h1{font-size:36px;line-height:1.35;margin:0 0 14px;font-weight:800}
+.hero-split .hero-eyebrow{font-size:11px;letter-spacing:.28em;margin:0 0 10px;color:var(--brand)}
+.hero-split .hero-text{margin:0;font-size:14.5px;opacity:.85}
+.hero-img{width:100%;height:300px;object-fit:cover}
+.now{background:var(--brand);color:#fff}
+.now-inner{max-width:1000px;margin:0 auto;padding:46px 20px;
+  display:grid;grid-template-columns:1.1fr .9fr;gap:32px;align-items:center}
+.now h1{font-size:34px;line-height:1.35;margin:0 0 12px;font-weight:800}
+.now p{margin:0;font-size:14.5px;opacity:.92}
+.now-live{display:inline-block;font-size:11px;font-weight:800;letter-spacing:.14em;
+  padding:5px 13px;border-radius:999px;background:var(--accent);color:#fff;margin-bottom:12px}
+.now-btn{display:inline-block;margin-top:18px;text-decoration:none;font-weight:800;
+  padding:16px 32px;border-radius:999px;background:#fff;color:var(--brand-dark)}
+.now-img{width:100%;height:240px;object-fit:cover}
+@media(max-width:760px){
+  .hero-split,.now-inner{grid-template-columns:1fr;gap:22px}
+  .hero-split{padding:34px 20px}
+  .now-inner{padding:34px 20px}
+  .hero-img{height:220px}.now-img{height:200px}
+  .now-btn{display:block;text-align:center}
+}
 .hd{position:sticky;top:0;z-index:30}
 .hd-inner{max-width:1000px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px}
 .logo{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;font-size:15px}
 .logo-img{height:34px;width:auto}
 .logo-mark{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px}
 .hd-go{margin-left:auto;text-decoration:none;font-weight:800;font-size:13px;padding:10px 20px;border-radius:999px;white-space:nowrap}
+.hd.hd-static{position:static}
+.hd-nav{display:flex;gap:16px;font-size:13px;font-weight:700}
+.hd-nav a{text-decoration:none;opacity:.8}
+.hd-nav a:hover{opacity:1}
+.hd-nav+.hd-go{margin-left:auto}
+.spot-link{display:inline-block;margin-top:8px;font-size:12.5px;font-weight:800;text-decoration:none;
+  border-bottom:1px solid currentColor;padding-bottom:1px}
+.ft-sns{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;font-size:12.5px;font-weight:700}
+.ft-sns a{text-decoration:none;border:1px solid currentColor;border-radius:999px;padding:6px 14px;opacity:.85}
+@media(max-width:700px){.hd-nav{display:none}}
 .ar .inner{max-width:1000px;margin:0 auto;padding:0 20px;display:flex;align-items:center;gap:28px}
 .ar .txt{flex:1;min-width:0}
 .ar h2{margin:0 0 8px;font-size:24px;font-weight:800}
@@ -288,6 +353,69 @@ a{color:inherit}
   .ar .inner{flex-direction:column;text-align:center;gap:20px}.ar .btn{width:100%;text-align:center}}
 @media(max-width:600px){.spot-img{width:84px;height:64px}.sec{padding:44px 0}}
 `;
+
+const FONT_STACKS: Record<PortalDesign["font"], string> = {
+  gothic: '"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif',
+  mincho: '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif',
+  rounded: '"Hiragino Maru Gothic ProN","Quicksand","M PLUS Rounded 1c","Hiragino Sans",sans-serif',
+};
+const RADIUS_PX: Record<PortalDesign["radius"], number> = { sharp: 0, soft: 14, round: 22 };
+const SEC_PAD: Record<PortalDesign["density"], number> = { compact: 40, normal: 60, airy: 88 };
+const TONE_COLORS: Record<
+  PortalDesign["tone"],
+  { bg: string; ink: string } | null
+> = {
+  default: null,
+  white: { bg: "#ffffff", ink: "#22272e" },
+  cream: { bg: "#fffdf5", ink: "#2e2a20" },
+  gray: { bg: "#f4f6f8", ink: "#242a31" },
+  dark: { bg: "#0e1219", ink: "#eef2f8" },
+};
+
+/**
+ * 管理画面のデザイン調整をCSSにする。
+ * テンプレートのCSSより後ろに置くので、ここで指定したものが必ず勝つ。
+ * 「テンプレートを選んだうえで細部を詰める」という順番をそのまま表している。
+ */
+function designCss(d: PortalData): string {
+  const g = d.design;
+  const r = RADIUS_PX[g.radius];
+  const pad = SEC_PAD[g.density];
+  const scale = Math.max(80, Math.min(130, g.headingScale)) / 100;
+  const tone = TONE_COLORS[g.tone];
+  const heroH = Math.max(220, Math.min(760, g.heroHeight));
+
+  const lines = [
+    `:root{--font:${FONT_STACKS[g.font]};--radius:${r}px}`,
+    // 見出しの書体は、本文をゴシックにしても明朝のままにできるよう分けて持つ。
+    g.font === "mincho" ? `:root{--font-head:${FONT_STACKS.mincho}}` : `:root{--font-head:${FONT_STACKS[g.font]}}`,
+    `body{font-family:var(--font)}`,
+    `.sec-head h2,.hero h1,.ar h2,.now h1{font-family:var(--font-head)}`,
+    `.sec{padding:${pad}px 0}`,
+    `.card,.banner,.chapter,.notes,.hero-img,.now-img,.spot-img{border-radius:${r}px}`,
+    `.hd-go,.ar .btn,.sticky a,.now-btn{border-radius:${r === 0 ? 4 : 999}px}`,
+    `.sec-head h2{font-size:${(26 * scale).toFixed(1)}px}`,
+    `.hero h1,.hero-split h1,.now h1{font-size:${(40 * scale).toFixed(1)}px}`,
+    `.hero{min-height:${heroH}px}`,
+    `@media(max-width:700px){.sec-head h2{font-size:${(21 * scale).toFixed(1)}px}
+      .hero h1,.hero-split h1,.now h1{font-size:${(28 * scale).toFixed(1)}px}
+      .hero{min-height:${Math.round(heroH * 0.78)}px}}`,
+  ];
+  if (tone) {
+    lines.push(`:root{--page-bg:${tone.bg};--page-ink:${tone.ink}}`);
+    if (g.tone === "dark") {
+      // 濃色にしたとき、白前提で作られている面だけ合わせる。
+      lines.push(
+        `.card,.banner,.notes,.chapter,.info-sec,.spots{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.14)}`,
+        `.hd{background:rgba(14,18,25,.94);border-bottom-color:rgba(255,255,255,.12)}`,
+        `.sticky{background:rgba(14,18,25,.96);border-top-color:rgba(255,255,255,.12)}`,
+        `.spot{border-bottom-color:rgba(255,255,255,.14)}`,
+        `.ph{background:rgba(255,255,255,.08);color:rgba(255,255,255,.5)}`
+      );
+    }
+  }
+  return lines.join("\n");
+}
 
 /** 提供終了・準備中の画面。URLは生かしたまま、状態だけを伝える。 */
 function statusPage(d: PortalData, kind: "draft" | "ended"): string {
@@ -328,7 +456,17 @@ export function renderPortal(d: PortalData, opts: { preview?: boolean } = {}): s
 
   const ctx: Ctx = { d, ph: !!opts.preview };
   const tpl = PORTAL_TEMPLATES.find((t) => t.value === d.template) ?? PORTAL_TEMPLATES[0];
-  const body = TEMPLATE_SECTIONS[d.template](ctx);
+  // 並び順・表示/非表示は管理画面の設定そのまま。
+  const body = [
+    header(ctx),
+    ...d.sections
+      .filter((s) => s.enabled)
+      .map((s) => SECTION_RENDERERS[s.key](ctx, s)),
+    footer(ctx),
+    sticky(ctx),
+  ]
+    .filter(Boolean)
+    .join("\n");
   const vars = `:root{--brand:${esc(d.brand)};--brand-dark:${esc(d.brandDark)};--accent:${esc(d.accent)}}`;
 
   return `<!doctype html>
@@ -342,7 +480,7 @@ ${d.siteDescription ? `<meta name="description" content="${esc(d.siteDescription
 ${d.siteDescription ? `<meta property="og:description" content="${esc(d.siteDescription)}">` : ""}
 ${d.ogImageUrl ? `<meta property="og:image" content="${esc(d.ogImageUrl)}">` : ""}
 <meta property="og:type" content="website">
-<style>${vars}${BASE_CSS}${TEMPLATE_CSS[d.template]}</style>
+<style>${vars}${BASE_CSS}${TEMPLATE_CSS[d.template]}${designCss(d)}</style>
 </head>
 <body class="tpl-${esc(tpl.value)}">
 ${body}

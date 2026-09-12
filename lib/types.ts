@@ -581,6 +581,14 @@ export interface AttendPortal {
   hash: string;
   name: string;
   template: string;
+  /** デザイン調整(PortalDesignの一部)。未設定ならテンプレート既定 */
+  design: unknown | null;
+  /** セクションの並び順・表示/非表示・見出し(PortalSection[]) */
+  sections: unknown | null;
+  /** ヘッダーのリンク(PortalNavLink[]) */
+  nav: unknown | null;
+  /** SNSリンク(PortalSnsLink[]) */
+  sns: unknown | null;
   status: "draft" | "published" | "ended";
   ended_message: string | null;
   ended_link_url: string | null;

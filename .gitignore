@@ -7,3 +7,6 @@ npm-install.log
 .DS_Store
 *.log
 tsconfig.tsbuildinfo
+
+# デザイン確認用に生成した一時HTML(セッション中の検証で作成)
+.portaltmp/
