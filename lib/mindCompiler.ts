@@ -65,7 +65,7 @@ export async function loadImageElementFromUrl(url: string): Promise<HTMLImageEle
  * images の配列インデックスが、そのまま mindar-image-target の targetIndex に対応する。
  */
 export const MINDAR_SCRIPT_URL =
-  "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image.prod.js";
+  "/vendor/mindar/mindar-image.prod.js";
 
 let mindArLoader: Promise<void> | null = null;
 

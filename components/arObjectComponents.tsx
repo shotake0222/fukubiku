@@ -48,12 +48,21 @@ export const DEFAULT_MODEL_ROTATION = "-90 0 0";
 // と同じ 3倍 を既定にする。
 export const DEFAULT_VIDEO_SCALE = "3 3 3";
 
-export const AFRAME_SRC = "https://aframe.io/releases/1.5.0/aframe.min.js";
+// ARの実行に必要なライブラリは、すべて自前配信(public/vendor/)にしている。
+//
+// 以前はA-Frame本体を aframe.io、aframe-extras と MindAR を jsdelivr から
+// 読み込んでいたが、外部CDNに依存している限り次の事故が避けられない。
+//   * 端末の回線・DNS・フィルタリングによって、ある端末だけ読み込めない
+//     (A-Frame本体が読めないとARの中身が丸ごと出ず、しかも無言で失敗する)
+//   * CDN側のファイル構成変更で、ある日突然404になる
+//     (実際にaframe-extrasで発生済み。下のコメント参照)
+//   * 同一オリジンでないためキャッシュの効き方が端末ごとにばらつく
+// バージョンをファイル名に含めてあるので、長期キャッシュ(immutable)を
+// 効かせても更新時に取り違えることがない(next.config.js のヘッダ設定)。
+export const AFRAME_SRC = "/vendor/aframe-1.5.0.min.js";
 export const ARJS_SRC = "/vendor/aframe-ar.js";
-export const MINDAR_IMAGE_AFRAME_SRC =
-  "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js";
-export const MINDAR_FACE_AFRAME_SRC =
-  "https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-face-aframe.prod.js";
+export const MINDAR_IMAGE_AFRAME_SRC = "/vendor/mindar-image-aframe-1.2.5.prod.js";
+export const MINDAR_FACE_AFRAME_SRC = "/vendor/mindar-face-aframe-1.2.5.prod.js";
 // .glbに埋め込まれたアニメーション(回転・拡縮・上下移動などのキーフレーム)を再生するために必要。
 // gltf-model単体では埋め込みアニメーションは自動再生されないため、この拡張コンポーネントを読み込む。
 //
@@ -67,8 +76,7 @@ export const MINDAR_FACE_AFRAME_SRC =
 // ある日突然404になる」事故を防ぐため、具体的なバージョンに固定した上で、
 // animation-mixerコンポーネントを含むことを確認済みの統合バンドル
 // (aframe-extras.min.js、controls/loaders/misc/animation-mixer等をすべて含む)を使う。
-export const AFRAME_EXTRAS_SRC =
-  "https://cdn.jsdelivr.net/npm/aframe-extras@7.7.0/dist/aframe-extras.min.js";
+export const AFRAME_EXTRAS_SRC = "/vendor/aframe-extras-7.7.0.min.js";
 
 // スクリプトの読み込み完了(またはエラー/タイムアウト)を待つ。
 // 以前はA-Frame本体/aframe-extras/AR.js(またはMindAR)をnext/scriptの
@@ -186,6 +194,7 @@ export function registerAlphaVideoComponent(AFRAME: any) {
     init() {
       const THREE = AFRAME.THREE;
       const src = this.data.src;
+      this._src = src;
       const video = document.createElement("video");
       // iOS Safari / Android Chrome でインライン自動再生させるための必須条件。
       // muted + playsinline + autoplay が揃っていないと play() が拒否され、
@@ -198,6 +207,14 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       video.setAttribute("webkit-playsinline", "true");
       video.setAttribute("playsinline", "true");
       video.preload = "auto";
+      video.setAttribute("data-alpha-video", "1");
+      video.setAttribute("disableRemotePlayback", "");
+      // 動画をDOMに入れずに再生しようとすると、端末によってはデコードが
+      // 始まらない(Androidで報告例が多い)。display:none や visibility:hidden も
+      // 合成対象から外れて同じことが起きるため、1pxのほぼ透明な要素として実際に置く。
+      video.style.cssText =
+        "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0.01;" +
+        "pointer-events:none;z-index:-1;object-fit:contain;";
       // 同一オリジン配信ならcrossOriginは不要。別ドメインから配信していて
       // CORSヘッダが無い場合、crossOrigin="anonymous"を付けたままだと
       // 動画自体が読み込めずに無表示になるため、失敗したら外して1度だけ再試行する。
@@ -216,6 +233,9 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       // (演出が一度も見られない)ことになるため。
       this._wantsPlay = false;
       this._wasVisible = null;
+      this._playStartedAt = 0;
+      this._lastTime = -1;
+      this._failed = false;
 
       const tryPlay = () => {
         if (!this._wantsPlay) return;
@@ -229,6 +249,9 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       video.addEventListener("canplay", tryPlay);
       // 最後まで再生したらそこで終わり。最終フレームがテクスチャに残るので、
       // 結果が表示されたまま静止する。
+      video.addEventListener("playing", () => {
+        this._playStartedAt = Date.now();
+      });
       video.addEventListener("ended", () => {
         this._wantsPlay = false;
       });
@@ -245,11 +268,16 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       document.addEventListener("click", resumeOnGesture);
       this._resumeOnGesture = resumeOnGesture;
       this._tryPlay = tryPlay;
+      if (document.body) document.body.appendChild(video);
       video.load();
 
       const texture = new THREE.VideoTexture(video);
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
+      // 端末によってはNPOT(1000x500)テクスチャの繰り返し指定で描画されないため明示する。
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.generateMipmaps = false;
 
       const material = new THREE.ShaderMaterial({
         uniforms: { map: { value: texture } },
@@ -263,6 +291,7 @@ export function registerAlphaVideoComponent(AFRAME: any) {
           }
         `,
         fragmentShader: `
+          precision mediump float;
           uniform sampler2D map;
           varying vec2 vUv;
           void main() {
@@ -289,25 +318,50 @@ export function registerAlphaVideoComponent(AFRAME: any) {
     // 表示された瞬間に頭から1回再生し、隠れたら先頭へ巻き戻して止める。
     // (マーカーを外して再度かざすと、もう一度最初から見られる)
     tick() {
-      if (!this.video) return;
+      if (!this.video || this._failed) return;
       const visible = isVisibleInScene(this.el.object3D);
-      if (visible === this._wasVisible) return;
-      this._wasVisible = visible;
-      if (visible) {
-        this._wantsPlay = true;
-        try {
-          this.video.currentTime = 0;
-        } catch (e) {
-          /* メタデータ読み込み前は無視してよい */
+      if (visible !== this._wasVisible) {
+        this._wasVisible = visible;
+        if (visible) {
+          this._wantsPlay = true;
+          this._playStartedAt = Date.now();
+          this._lastTime = -1;
+          try {
+            this.video.currentTime = 0;
+          } catch (e) {
+            /* メタデータ読み込み前は無視してよい */
+          }
+          this._tryPlay();
+        } else {
+          this._wantsPlay = false;
+          this.video.pause();
+          try {
+            this.video.currentTime = 0;
+          } catch (e) {
+            /* 同上 */
+          }
         }
-        this._tryPlay();
-      } else {
-        this._wantsPlay = false;
-        this.video.pause();
-        try {
-          this.video.currentTime = 0;
-        } catch (e) {
-          /* 同上 */
+      }
+      // 再生が始まらない/進まないまま6秒過ぎたら失敗として知らせる。
+      // (デコーダ不足・自動再生ブロック・壊れたファイルなど原因は端末次第。
+      //  黙って何も出ないまま終わらせないことが目的)
+      if (this._wantsPlay && this._playStartedAt) {
+        const t = this.video.currentTime;
+        if (t > 0 && t !== this._lastTime) {
+          this._lastTime = t;
+          this._playStartedAt = Date.now();
+        } else if (Date.now() - this._playStartedAt > 6000) {
+          this._failed = true;
+          this._wantsPlay = false;
+          try {
+            this.el.emit(
+              "ar-object-failed",
+              { reason: `再生が始まりませんでした (readyState ${this.video.readyState})`, src: this._src },
+              true
+            );
+          } catch (e) {
+            /* 失敗の通知自体で落ちないように */
+          }
         }
       }
     },
@@ -315,7 +369,9 @@ export function registerAlphaVideoComponent(AFRAME: any) {
       if (this.mesh) this.el.removeObject3D("alpha-video-mesh");
       if (this.video) {
         this.video.pause();
-        this.video.src = "";
+        this.video.removeAttribute("src");
+        this.video.load();
+        if (this.video.parentNode) this.video.parentNode.removeChild(this.video);
       }
       if (this._resumeOnGesture) {
         document.removeEventListener("touchend", this._resumeOnGesture);

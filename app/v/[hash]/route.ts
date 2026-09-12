@@ -26,7 +26,13 @@ import {
 // 抽選(どの景品を出すか)はサーバー側で解決し、その結果だけをHTMLに埋め込む。
 export const dynamic = "force-dynamic";
 
-const ALPHA_VIDEO_COMPONENT = "\nif (window.AFRAME && !AFRAME.components[\"alpha-video\"]) {\n  AFRAME.registerComponent(\"alpha-video\", {\n    schema: { src: { type: \"string\" }, loop: { type: \"boolean\", default: false } },\n    init: function () {\n      var THREE = AFRAME.THREE;\n      var self = this;\n      var src = this.data.src;\n      var video = document.createElement(\"video\");\n      video.muted = true;\n      video.defaultMuted = true;\n      video.setAttribute(\"muted\", \"\");\n      video.loop = this.data.loop;\n      video.playsInline = true;\n      video.setAttribute(\"playsinline\", \"\");\n      video.setAttribute(\"webkit-playsinline\", \"true\");\n      video.preload = \"auto\";\n      var corsRetried = false;\n      try { if (new URL(src, window.location.href).origin !== window.location.origin) { video.crossOrigin = \"anonymous\"; } } catch (e) {}\n      video.src = src;\n      this.video = video;\n      this._wantsPlay = false;\n      this._wasVisible = null;\n      var tryPlay = function () { if (!self._wantsPlay) return; var p = video.play(); if (p && p.catch) p.catch(function () {}); };\n      this._tryPlay = tryPlay;\n      video.addEventListener(\"loadeddata\", tryPlay);\n      video.addEventListener(\"canplay\", tryPlay);\n      video.addEventListener(\"ended\", function () { self._wantsPlay = false; });\n      video.addEventListener(\"error\", function () {\n        if (corsRetried || !video.crossOrigin) return;\n        corsRetried = true;\n        video.removeAttribute(\"crossorigin\");\n        video.src = src; video.load(); tryPlay();\n      });\n      document.addEventListener(\"touchend\", tryPlay);\n      document.addEventListener(\"click\", tryPlay);\n      video.load();\n      var texture = new THREE.VideoTexture(video);\n      texture.minFilter = THREE.LinearFilter;\n      texture.magFilter = THREE.LinearFilter;\n      var material = new THREE.ShaderMaterial({\n        uniforms: { map: { value: texture } },\n        transparent: true,\n        side: THREE.DoubleSide,\n        vertexShader:\n          \"varying vec2 vUv; void main(){ vUv = uv;\" +\n          \" gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }\",\n        fragmentShader:\n          \"uniform sampler2D map; varying vec2 vUv;\" +\n          \" void main(){ vec2 cUv = vec2(vUv.x*0.5, vUv.y);\" +\n          \" vec2 aUv = vec2(vUv.x*0.5+0.5, vUv.y);\" +\n          \" vec3 c = texture2D(map, cUv).rgb;\" +\n          \" float a = texture2D(map, aUv).r;\" +\n          \" if (a < 0.02) discard;\" +\n          \" gl_FragColor = vec4(c, a); }\"\n      });\n      var mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), material);\n      this.mesh = mesh;\n      this.el.setObject3D(\"alpha-video-mesh\", mesh);\n      video.addEventListener(\"loadedmetadata\", function () {\n        var w = video.videoWidth / 2 || 1;\n        var h = video.videoHeight || 1;\n        self.mesh.scale.set(1, h / w, 1);\n      });\n    },\n    tick: function () {\n      if (!this.video) return;\n      var node = this.el.object3D, visible = true;\n      while (node) { if (!node.visible) { visible = false; break; } node = node.parent; }\n      if (visible === this._wasVisible) return;\n      this._wasVisible = visible;\n      if (visible) {\n        this._wantsPlay = true;\n        try { this.video.currentTime = 0; } catch (e) {}\n        this._tryPlay();\n      } else {\n        this._wantsPlay = false;\n        this.video.pause();\n        try { this.video.currentTime = 0; } catch (e) {}\n      }\n    },\n    remove: function () {\n      if (this.mesh) this.el.removeObject3D(\"alpha-video-mesh\");\n      if (this.video) { this.video.pause(); this.video.src = \"\"; }\n      if (this._tryPlay) {\n        document.removeEventListener(\"touchend\", this._tryPlay);\n        document.removeEventListener(\"click\", this._tryPlay);\n      }\n    }\n  });\n}\nif (window.AFRAME && !AFRAME.components[\"gif-image\"]) {\n  AFRAME.registerComponent(\"gif-image\", {\n    schema: { src: { type: \"string\" } },\n    init: function () {\n      var THREE = AFRAME.THREE;\n      var self = this;\n      this.img = document.createElement(\"img\");\n      this.img.crossOrigin = \"anonymous\";\n      this.canvas = document.createElement(\"canvas\");\n      this.canvas.width = 2; this.canvas.height = 2;\n      this.ctx = this.canvas.getContext(\"2d\");\n      this.texture = new THREE.CanvasTexture(this.canvas);\n      this.img.onload = function () {\n        var w0 = self.img.naturalWidth || 1, h0 = self.img.naturalHeight || 1;\n        self.canvas.width = w0; self.canvas.height = h0;\n        var material = new THREE.MeshBasicMaterial({\n          map: self.texture, transparent: true, side: THREE.DoubleSide\n        });\n        self.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, h0 / w0), material);\n        self.el.setObject3D(\"gif-mesh\", self.mesh);\n      };\n      this.img.src = this.data.src;\n    },\n    tick: function () {\n      if (this.ctx && this.img.complete && this.img.naturalWidth) {\n        try {\n          this.ctx.drawImage(this.img, 0, 0, this.canvas.width, this.canvas.height);\n          this.texture.needsUpdate = true;\n        } catch (e) {}\n      }\n    },\n    remove: function () { if (this.mesh) this.el.removeObject3D(\"gif-mesh\"); }\n  });\n}\n";
+// 透過MP4/GIFを描画するA-Frameコンポーネントは public/ar/ar-objects.js に、
+// 失敗検知と復帰処理は public/ar/ar-boot.js に切り出してある。
+// (以前はこのファイルに1行のエスケープ済み文字列として埋め込まれており、
+//  手を入れるのが現実的でなかった。静的ファイルにしたことで読める・
+//  キャッシュが効く・HTMLが軽くなる、が同時に得られる)
+const AR_OBJECTS_SRC = "/ar/ar-objects.js";
+const AR_BOOT_SRC = "/ar/ar-boot.js";
 
 // マーカーの姿勢を「マーカーの外側にある別エンティティ(ステージ)」へ写して描画する。
 //
@@ -212,6 +218,19 @@ function cookieUrlFor(category: string | null): string | null {
   return "/presets/" + category + "/" + category + "_cookie_3d.glb";
 }
 
+// 透過MP4/画像のURLから、同じ景品の3Dモデル版(.glb)のURLを導く。
+//   /presets/darts/darts_atari.mp4 → /presets/darts/darts_atari_3d.glb
+// テンプレートは命名規則が揃っているのでURLだけで対応が取れる。
+// (DBを引き直す必要がないので、表示直前でも確実に用意できる)
+function modelFallbackFor(url: string): string | null {
+  const path = url.replace(/^https?:\/\/[^/]+/, "").split("?")[0];
+  const m = /^\/presets\/([a-z0-9]+)\/([a-z0-9]+)_([a-z0-9]+)\.(mp4|gif|png|jpe?g|webp)$/i.exec(path);
+  if (!m) return null;
+  const [, dir, prefix, tier] = m;
+  if (dir !== prefix || !CATEGORY_SLUGS.has(dir)) return null;
+  return "/presets/" + dir + "/" + prefix + "_" + tier + "_3d.glb";
+}
+
 function assetKind(url: string): "video" | "image" | "model" {
   if (/\.mp4(\?|$)/i.test(url)) return "video";
   if (/\.(gif|png|jpe?g|webp)(\?|$)/i.test(url)) return "image";
@@ -287,6 +306,11 @@ function buildArHtml(opts: {
   suspenseUrl: string | null;
   /** クールダウン中などに画面下部へ出す案内文(プレーンテキスト)。 */
   notice: string | null;
+  /** 透過MP4/画像が表示できなかった端末向けの代替(同じ景品の3Dモデル版)。 */
+  fallbackUrl: string | null;
+  fallbackScale: string | null;
+  /** ?nocache=1 のとき、ライブラリのURLに ?cb= を足してキャッシュを迂回する。 */
+  nocache: boolean;
 }): string {
   const kind = assetKind(opts.modelUrl);
   const rotation = opts.rotation || baseRotationFor(opts.useMindAr);
@@ -294,17 +318,25 @@ function buildArHtml(opts: {
   // 平面(動画/画像)の結果に3Dの焦らしを挟むと見た目の連続性が崩れるため。
   const suspenseUrl = kind === "model" ? opts.suspenseUrl : null;
 
+  // 透過MP4/画像が出せない端末のために、同じ景品の3Dモデル版を控えとして渡す。
+  // ar-boot.js が ar-object-failed を受け取ったら、この属性を見て切り替える。
+  const fallbackAttr =
+    kind !== "model" && opts.fallbackUrl
+      ? ' data-fallback-src="' + esc(opts.fallbackUrl) + '"' +
+        ' data-fallback-scale="' + esc(opts.fallbackScale || "2 2 2") + '"'
+      : "";
+
   let objectMarkup: string;
   if (kind === "video") {
     objectMarkup =
       '<a-entity id="ar-object" alpha-video="src: ' + esc(opts.modelUrl) + '"' +
       ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
-      ' scale="' + esc(opts.scale) + '"></a-entity>';
+      ' scale="' + esc(opts.scale) + '"' + fallbackAttr + "></a-entity>";
   } else if (kind === "image") {
     objectMarkup =
       '<a-entity id="ar-object" gif-image="src: ' + esc(opts.modelUrl) + '"' +
       ' position="' + esc(opts.position) + '" rotation="' + esc(rotation) + '"' +
-      ' scale="' + esc(opts.scale) + '"></a-entity>';
+      ' scale="' + esc(opts.scale) + '"' + fallbackAttr + "></a-entity>";
   } else {
     objectMarkup =
       '<a-entity id="ar-object" gltf-model="url(' + esc(opts.modelUrl) + ')"' +
@@ -362,9 +394,19 @@ function buildArHtml(opts: {
       "<a-entity camera></a-entity>" +
       "</a-scene>";
 
+  // 端末に壊れたキャッシュが残っているケースからの復帰用。
+  // エラー画面の「キャッシュを使わずに再読み込み」が ?nocache=1 を付けて開き直す。
+  const bust = (url: string) => (opts.nocache ? url + "?cb=" + Date.now() : url);
+  // 読み込みの成否を必ず記録する。onerror が無いと、ライブラリが1つ落ちただけで
+  // 画面が真っ暗のまま何の手がかりも残らない(端末差の相談で毎回これが起きる)。
+  const lib = (name: string, url: string) =>
+    '<script src="' + bust(url) + '"' +
+    ' onload="__arScript(\'' + name + '\',\'ok\')"' +
+    ' onerror="__arScript(\'' + name + '\',\'error\')"><\/script>';
+
   const engineScript = opts.useMindAr
-    ? '<script src="https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js"></script>'
-    : '<script src="/vendor/aframe-ar.js"></script>';
+    ? lib("mindar", "/vendor/mindar-image-aframe-1.2.5.prod.js")
+    : lib("arjs", "/vendor/aframe-ar.js");
 
   return [
     "<!DOCTYPE html>",
@@ -373,8 +415,11 @@ function buildArHtml(opts: {
     '<meta charset="utf-8">',
     '<meta name="viewport" content="width=device-width,initial-scale=1.0,minimum-scale=1.0,maximum-scale=1.0,user-scalable=no">',
     "<title>fukubiku</title>",
-    '<script src="https://aframe.io/releases/1.5.0/aframe.min.js"><\/script>',
-    '<script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.7.0/dist/aframe-extras.min.js"><\/script>',
+    // 読み込み状況の記録先を最初に用意する(この後のonerrorが参照する)。
+    "<script>window.__AR_DIAG={scripts:{},startedAt:Date.now()};" +
+      "function __arScript(n,s){window.__AR_DIAG.scripts[n]=s;}<\/script>",
+    lib("aframe", "/vendor/aframe-1.5.0.min.js"),
+    lib("aframe-extras", "/vendor/aframe-extras-7.7.0.min.js"),
     engineScript,
     "<style>",
     "body { margin: 0; overflow: hidden; background: #000; }",
@@ -397,10 +442,10 @@ function buildArHtml(opts: {
     "  text-align: center; color: #2196F3; font-size: 18px; font-weight: bold; pointer-events: none;",
     "  box-sizing: border-box; padding: 0 10px; text-shadow: 1px 1px 2px rgba(255,255,255,0.8); }",
     "</style>",
-    // 透過MP4(左半分=RGB / 右半分=アルファ)とGIF/画像を描画するコンポーネント。
-    // a-sceneが解析される前に登録しておく必要があるため、head内で登録する。
+    // 透過MP4/GIFのコンポーネントは、a-sceneが解析される前に登録しておく必要がある。
+    lib("ar-objects", AR_OBJECTS_SRC),
+    lib("ar-boot", AR_BOOT_SRC),
     "<script>",
-    ALPHA_VIDEO_COMPONENT,
     TRACKING_COMPONENT,
     "<\/script>",
     "</head>",
@@ -451,7 +496,10 @@ function buildArHtml(opts: {
     "  var dlBtn = document.getElementById('download-photo');",
     "  takeBtn.addEventListener('click', function(e){",
     "    e.preventDefault();",
-    "    var bgVideo = document.querySelector('#arjs-video') || document.querySelector('video');",
+    // 透過MP4用のvideo要素もDOMに入っている(端末によってはDOMに無いと
+    // デコードが始まらないため)。撮影時に取り違えないよう除外する。
+    "    var bgVideo = document.querySelector('#arjs-video') ||",
+    "      document.querySelector('video:not([data-alpha-video])');",
     "    var sceneEl = document.querySelector('a-scene');",
     "    var arCanvas = null;",
     "    try { arCanvas = sceneEl.components.screenshot.getCanvas('perspective'); } catch (err) { arCanvas = null; }",
@@ -502,6 +550,8 @@ export async function GET(
 ): Promise<Response> {
   const supabase = createAdminClient();
   const markerUrl = "/markers/patternkuji.patt";
+  // エラー画面の「キャッシュを使わずに再読み込み」から戻ってきたときだけ立つ。
+  const nocache = new URL(_request.url).searchParams.get("nocache") === "1";
 
   const respondAr = (o: {
     modelUrl: string | null;
@@ -537,6 +587,10 @@ export async function GET(
       // プリセットに個別の大きさが保存されている場合はそちらが優先される。
       scale: o.scale || (kind === "model" ? "2 2 2" : "6 6 6"),
       position: o.position || "0 0 0",
+      // 透過MP4/画像が出せない端末のための控え(同じ景品の3Dモデル版)。
+      fallbackUrl: kind === "model" ? null : modelFallbackFor(o.modelUrl),
+      fallbackScale: "2 2 2",
+      nocache,
     });
     const headers: Record<string, string> = {
       "content-type": "text/html; charset=utf-8",
