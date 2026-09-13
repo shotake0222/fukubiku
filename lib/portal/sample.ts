@@ -172,6 +172,8 @@ export function samplePortalData(
       { kind: "x", url: "#" },
       { kind: "instagram", url: "#" },
     ],
+    customHtml: null,
+    customCss: null,
     blocks: blocks(COMMON),
   };
 }

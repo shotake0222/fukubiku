@@ -6,6 +6,7 @@ import {
   faq,
   footer,
   header,
+  htmlBlocks,
   img,
   news,
   nl2br,
@@ -128,6 +129,7 @@ export const SECTION_RENDERERS: Record<SectionKey, (ctx: Ctx, s: PortalSection) 
   outline: (c, s) => outlineOnly(c, s.eyebrow, s.heading),
   faq: (c, s) => faq(c, s.eyebrow, s.heading),
   notes: (c, s) => notesSection(c, s.heading),
+  html: (c) => htmlBlocks(c),
 };
 
 /** お知らせ単体。観光テンプレートで開催概要と横並びにするためのクラスは残す */

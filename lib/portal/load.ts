@@ -85,6 +85,8 @@ export function toPortalData(
     sections: resolveSections(template, p.sections as PortalSection[] | null),
     nav: asNav(p.nav),
     sns: asSns(p.sns),
+    customHtml: p.custom_html,
+    customCss: p.custom_css,
     status: p.status,
     endedMessage: p.ended_message,
     endedLinkUrl: p.ended_link_url,

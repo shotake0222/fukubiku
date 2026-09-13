@@ -99,6 +99,10 @@ create table attend_portals (
   nav jsonb,
   sns jsonb,
 
+  -- HTMLを直接書く場合に使う
+  custom_html text,
+  custom_css text,
+
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -107,7 +111,7 @@ create table attend_portal_blocks (
   id uuid primary key default gen_random_uuid(),
   portal_id uuid not null references attend_portals(id) on delete cascade,
   kind text not null
-    check (kind in ('pick', 'spot', 'banner', 'news', 'faq', 'outline', 'note', 'chapter')),
+    check (kind in ('pick', 'spot', 'banner', 'news', 'faq', 'outline', 'note', 'chapter', 'html')),
   sort_order integer not null default 0,
 
   title text,

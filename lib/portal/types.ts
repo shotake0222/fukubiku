@@ -8,7 +8,9 @@ export type PortalBlockKind =
   | "faq"
   | "outline"
   | "note"
-  | "chapter";
+  | "chapter"
+  // テンプレートの好きな位置に差し込む自由HTML
+  | "html";
 
 export const PORTAL_TEMPLATES: {
   value: PortalTemplate;
@@ -134,6 +136,11 @@ export interface PortalData {
   /** SNS・公式サイトへのリンク */
   sns: PortalSnsLink[];
 
+  /** ページ全体を差し替えるHTML。設定するとテンプレートを使わない */
+  customHtml: string | null;
+  /** テンプレートの後ろに足すCSS */
+  customCss: string | null;
+
   blocks: Record<PortalBlockKind, PortalBlock[]>;
 }
 
@@ -175,7 +182,7 @@ export function resolveSections(
 }
 
 export function emptyBlocks(): Record<PortalBlockKind, PortalBlock[]> {
-  return { pick: [], spot: [], banner: [], news: [], faq: [], outline: [], note: [], chapter: [] };
+  return { pick: [], spot: [], banner: [], news: [], faq: [], outline: [], note: [], chapter: [], html: [] };
 }
 
 // ============================================================
@@ -193,7 +200,8 @@ export type SectionKey =
   | "news"
   | "outline"
   | "faq"
-  | "notes";
+  | "notes"
+  | "html";
 
 export interface PortalSection {
   key: SectionKey;
@@ -217,6 +225,7 @@ export const SECTION_LABELS: Record<SectionKey, string> = {
   outline: "開催概要",
   faq: "よくある質問",
   notes: "注意書き・お願い",
+  html: "自由HTML（自分で書いた部分）",
 };
 
 /** そのセクションが中身として使うブロック。0件なら編集画面で「まだ空です」と出す */
@@ -230,6 +239,7 @@ export const SECTION_BLOCK: Partial<Record<SectionKey, PortalBlockKind>> = {
   outline: "outline",
   faq: "faq",
   notes: "note",
+  html: "html",
 };
 
 function sec(key: SectionKey, eyebrow: string, heading: string, enabled = true): PortalSection {
@@ -251,6 +261,7 @@ export const TEMPLATE_DEFAULT_SECTIONS: Record<PortalTemplate, PortalSection[]> 
     sec("chapters", "CHAPTERS", "これまでの章", false),
     sec("status", "", "", false),
     sec("campaign", "", "", false),
+    sec("html", "", "", false),
   ],
   shotengai: [
     sec("hero", "", ""),
@@ -265,6 +276,7 @@ export const TEMPLATE_DEFAULT_SECTIONS: Record<PortalTemplate, PortalSection[]> 
     sec("notes", "", "ご参加にあたって", false),
     sec("chapters", "CHAPTERS", "これまでの章", false),
     sec("status", "", "", false),
+    sec("html", "", "", false),
   ],
   shisetsu: [
     sec("status", "", ""),
@@ -279,6 +291,7 @@ export const TEMPLATE_DEFAULT_SECTIONS: Record<PortalTemplate, PortalSection[]> 
     sec("news", "NEWS", "お知らせ", false),
     sec("chapters", "CHAPTERS", "これまでの章", false),
     sec("campaign", "", "", false),
+    sec("html", "", "", false),
   ],
   seichi: [
     sec("hero", "", ""),
@@ -293,6 +306,7 @@ export const TEMPLATE_DEFAULT_SECTIONS: Record<PortalTemplate, PortalSection[]> 
     sec("chapters", "CHAPTERS", "これまでの章", false),
     sec("status", "", "", false),
     sec("campaign", "", "", false),
+    sec("html", "", "", false),
   ],
   jousetsu: [
     sec("hero", "", ""),
@@ -307,6 +321,7 @@ export const TEMPLATE_DEFAULT_SECTIONS: Record<PortalTemplate, PortalSection[]> 
     sec("notes", "", "ご参加にあたって", false),
     sec("status", "", "", false),
     sec("campaign", "", "", false),
+    sec("html", "", "", false),
   ],
 };
 

@@ -29,6 +29,8 @@ import type {
   PortalTemplate,
 } from "@/lib/portal/types";
 import PortalPreview from "@/components/PortalPreview";
+import CodeEditor from "@/components/CodeEditor";
+import { renderPortal } from "@/lib/portal/render";
 import type { AttendPortal, AttendPortalBlock, AttendProject, AttendRally } from "@/lib/types";
 
 const ASSET_BUCKET = "assets";
@@ -52,6 +54,8 @@ const BLOCK_FIELDS: Record<
   outline: { label: "開催概要", title: "項目名", body: "内容" },
   note: { label: "注意書き・お願い", title: "本文（1行ずつ）" },
   chapter: { label: "章（季節）", title: "章の名前", body: "期間", meta: "英字ラベル（SPRINGなど）", image: true, badge: "開催中の印" },
+  // HTMLブロックは専用のエディタで編集するため、ここでは使わない
+  html: { label: "自由HTML", title: "この枠の名前（管理用）" },
 };
 
 interface BlockDraft {
@@ -363,6 +367,9 @@ export default function AttendPortalEditor({
     return () => mq.removeEventListener("change", apply);
   }, []);
 
+  const [customHtml, setCustomHtml] = useState(portal.custom_html ?? "");
+  const [customCss, setCustomCss] = useState(portal.custom_css ?? "");
+
   const [drafts, setDrafts] = useState<BlockDraft[]>(blocks.map(toDraft));
   const [removedIds, setRemovedIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -422,6 +429,8 @@ export default function AttendPortalEditor({
     });
   }
 
+  const htmlBlocks = drafts.filter((d) => d.kind === "html");
+
   // いま編集中の内容を、そのまま公開ページと同じ描画処理に渡せる形にする。
   // 保存を挟まないので、入力した瞬間に横のプレビューへ反映される。
   const previewData: PortalData = useMemo(() => {
@@ -474,9 +483,11 @@ export default function AttendPortalEditor({
       sections,
       nav: nav.filter((n) => n.label.trim() && n.url.trim()),
       sns: sns.filter((x) => x.url.trim()),
+      customHtml: customHtml.trim() ? customHtml : null,
+      customCss: customCss.trim() ? customCss : null,
       blocks: b,
     };
-  }, [f, design, sections, nav, sns, drafts, siteOrigin]);
+  }, [f, design, sections, nav, sns, drafts, siteOrigin, customHtml, customCss]);
 
   async function handleSave() {
     setSaving(true);
@@ -520,6 +531,8 @@ export default function AttendPortalEditor({
         sections,
         nav: nav.filter((n) => n.label.trim() && n.url.trim()),
         sns: sns.filter((x) => x.url.trim()),
+        custom_html: customHtml.trim() ? customHtml : null,
+        custom_css: customCss.trim() ? customCss : null,
       })
       .eq("id", portal.id);
 
@@ -923,6 +936,152 @@ export default function AttendPortalEditor({
               </div>
             );
           })}
+        </div>
+      </section>
+
+      {/* HTMLを直接書く */}
+      <section className="bg-white rounded-xl shadow p-6 space-y-5">
+        <div>
+          <h2 className="font-semibold">HTMLを直接書く</h2>
+          <p className="text-xs text-slate-400">
+            テンプレートで足りないところは、ここで直接書けます。
+            右のプレビューにそのまま反映されるので、保存前に確認できます。
+          </p>
+        </div>
+
+        {/* 1. 部分的に差し込む */}
+        <div className="space-y-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-slate-600">① 好きな位置に差し込む（HTMLブロック）</span>
+            <span className="text-[11px] text-slate-400">
+              「ページの構成」で並び順を変えられます
+            </span>
+          </div>
+          {!sections.find((x) => x.key === "html")?.enabled && (
+            <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              いまは非表示の設定です。上の「ページの構成」で
+              「{SECTION_LABELS.html}」にチェックを入れると出るようになります。
+            </p>
+          )}
+          {htmlBlocks.map((d, i) => (
+            <div key={d.id} className="border rounded-lg p-3 space-y-2">
+              <div className="flex items-center gap-2">
+                <input
+                  value={d.title}
+                  onChange={(e) => updateBlock(d.id, { title: e.target.value })}
+                  placeholder={`HTML ${i + 1}（管理用の名前）`}
+                  className="input text-xs flex-1"
+                />
+                <label className="flex items-center gap-1 text-[11px] text-slate-500 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={d.enabled}
+                    onChange={(e) => updateBlock(d.id, { enabled: e.target.checked })}
+                  />
+                  表示
+                </label>
+                <button
+                  type="button"
+                  onClick={() => removeBlock(d.id)}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  削除
+                </button>
+              </div>
+              <CodeEditor
+                value={d.body}
+                onChange={(v) => updateBlock(d.id, { body: v })}
+                rows={10}
+                placeholder={'<section style="padding:40px 20px;text-align:center">\n  <h2>好きな見出し</h2>\n  <p>本文</p>\n</section>'}
+              />
+            </div>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              addBlock("html");
+              if (!sections.find((x) => x.key === "html")?.enabled) {
+                updateSection("html", { enabled: true });
+              }
+            }}
+            className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50"
+          >
+            + HTMLブロックを追加
+          </button>
+        </div>
+
+        {/* 2. CSSで上書き */}
+        <div className="space-y-2 border-t pt-4">
+          <span className="text-xs font-medium text-slate-600">② 追加CSS（テンプレートの見た目を上書き）</span>
+          <p className="text-[11px] text-slate-400">
+            テンプレートのCSSより後ろに置かれるので、ここに書いたものが優先されます。
+            例：<code className="font-mono">.hero h1 {"{"} letter-spacing: .08em {"}"}</code>
+          </p>
+          <CodeEditor
+            language="CSS"
+            value={customCss}
+            onChange={setCustomCss}
+            rows={8}
+            placeholder={".hero h1 { letter-spacing: .08em }\n.spot-img { border-radius: 0 }"}
+          />
+        </div>
+
+        {/* 3. 全面差し替え */}
+        <div className="space-y-2 border-t pt-4">
+          <span className="text-xs font-medium text-slate-600">③ ページ全体を自分で書く</span>
+          <p className="text-[11px] text-slate-400">
+            ここに書くと、テンプレート・デザイン調整・ページの構成は使われず、
+            この内容がそのまま配信されます。最後の逃げ道として用意しています。
+            空にすればテンプレートに戻ります。
+          </p>
+
+          {customHtml.trim() && !customHtml.includes("/r/") && (
+            <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded-lg p-2">
+              スタンプラリーへのリンク（/r/...）が見当たりません。
+              参加導線が無いと、このページを見た人はラリーに進めません。
+            </p>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                // いまの見た目をHTMLとして書き出して、それを直接いじってもらう。
+                // 白紙から書かせると、ヘッダーも参加導線も作り直しになる。
+                // 公開時と同じ状態で書き出す。プレビュー用の
+                // 「画像が入ります」の枠を焼き込んでしまわないようにする。
+                setCustomHtml(
+                  renderPortal(
+                    { ...previewData, customHtml: null, status: "published" },
+                    { preview: false }
+                  )
+                );
+              }}
+              className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50"
+            >
+              いまの見た目をHTMLとして取り込む
+            </button>
+            {customHtml.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("書いたHTMLを消して、テンプレートに戻します。よろしいですか？")) {
+                    setCustomHtml("");
+                  }
+                }}
+                className="text-sm px-3 py-1 rounded-lg border hover:bg-slate-50 text-red-600"
+              >
+                テンプレートに戻す
+              </button>
+            )}
+          </div>
+
+          <CodeEditor
+            value={customHtml}
+            onChange={setCustomHtml}
+            rows={20}
+            placeholder={"空のままならテンプレートが使われます。\n上の「いまの見た目をHTMLとして取り込む」から始めるのが安全です。"}
+          />
         </div>
       </section>
 

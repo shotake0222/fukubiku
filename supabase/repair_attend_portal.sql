@@ -51,6 +51,8 @@ alter table attend_portals add column if not exists privacy_url text;
 alter table attend_portals add column if not exists terms_url text;
 alter table attend_portals add column if not exists contact_url text;
 alter table attend_portals add column if not exists copyright_text text;
+alter table attend_portals add column if not exists custom_html text;
+alter table attend_portals add column if not exists custom_css text;
 
 alter table attend_portals add column if not exists created_at timestamptz not null default now();
 alter table attend_portals add column if not exists updated_at timestamptz not null default now();
@@ -89,7 +91,7 @@ alter table attend_portal_blocks add column if not exists updated_at timestamptz
 
 alter table attend_portal_blocks drop constraint if exists attend_portal_blocks_kind_check;
 alter table attend_portal_blocks add constraint attend_portal_blocks_kind_check
-  check (kind in ('pick', 'spot', 'banner', 'news', 'faq', 'outline', 'note', 'chapter'));
+  check (kind in ('pick', 'spot', 'banner', 'news', 'faq', 'outline', 'note', 'chapter', 'html'));
 
 -- ============================================================
 -- 3) 参加者のメール登録（同じ理由で足りていない可能性がある）

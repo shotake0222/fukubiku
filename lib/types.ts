@@ -589,6 +589,10 @@ export interface AttendPortal {
   nav: unknown | null;
   /** SNSリンク(PortalSnsLink[]) */
   sns: unknown | null;
+  /** ページ全体を差し替えるHTML */
+  custom_html: string | null;
+  /** テンプレートの後ろに足すCSS */
+  custom_css: string | null;
   status: "draft" | "published" | "ended";
   ended_message: string | null;
   ended_link_url: string | null;

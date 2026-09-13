@@ -178,6 +178,18 @@ export function chapters(ctx: Ctx, eyebrow: string, heading: string): string {
   return `<section class="sec chapters-sec">${secHead(eyebrow, heading)}<div class="wrap"><div class="chapters">${cards}</div></div></section>`;
 }
 
+/**
+ * 自分で書いたHTMLをそのまま差し込む枠。
+ * テンプレートの見出しや余白に合わせたい場合のために .wrap で包むかを選べるが、
+ * 迷わせないよう、まずはそのまま出す（中で好きに組んでもらう）。
+ * ここはエスケープしない（それが目的の枠なので）。
+ */
+export function htmlBlocks(ctx: Ctx): string {
+  const list = ctx.d.blocks.html;
+  if (!list.length) return "";
+  return list.map((b) => b.body ?? "").filter(Boolean).join("\n");
+}
+
 export function header(ctx: Ctx): string {
   const { d } = ctx;
   const logo = d.logoUrl
@@ -454,6 +466,10 @@ export function renderPortal(d: PortalData, opts: { preview?: boolean } = {}): s
     return statusPage(d, d.status === "ended" ? "ended" : "draft");
   }
 
+  // 全面HTMLが入っていれば、テンプレートを使わずそのまま配信する。
+  // 「HTMLを自分で書きたい」に対する最後の逃げ道。
+  if (d.customHtml && d.customHtml.trim()) return d.customHtml;
+
   const ctx: Ctx = { d, ph: !!opts.preview };
   const tpl = PORTAL_TEMPLATES.find((t) => t.value === d.template) ?? PORTAL_TEMPLATES[0];
   // 並び順・表示/非表示は管理画面の設定そのまま。
@@ -480,7 +496,8 @@ ${d.siteDescription ? `<meta name="description" content="${esc(d.siteDescription
 ${d.siteDescription ? `<meta property="og:description" content="${esc(d.siteDescription)}">` : ""}
 ${d.ogImageUrl ? `<meta property="og:image" content="${esc(d.ogImageUrl)}">` : ""}
 <meta property="og:type" content="website">
-<style>${vars}${BASE_CSS}${TEMPLATE_CSS[d.template]}${designCss(d)}</style>
+<style>${vars}${BASE_CSS}${TEMPLATE_CSS[d.template]}${designCss(d)}
+${d.customCss ?? ""}</style>
 </head>
 <body class="tpl-${esc(tpl.value)}">
 ${body}
