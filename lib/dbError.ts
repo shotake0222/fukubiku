@@ -58,7 +58,8 @@ export function describeDbError(e: DbErrorLike | null | undefined, what: string)
     return (
       `${what}に失敗しました。データベースの準備がまだのようです。\n` +
       `Supabaseのダッシュボード > SQL Editor で ${sql} を実行してから、もう一度お試しください。\n` +
-      `どのSQLが未実行かは supabase/check_attend_setup.sql を流すと一覧で分かります。` +
+      `どのSQLが未実行かは supabase/check_attend_setup.sql を流すと一覧で分かります。\n` +
+      `それでも直らない場合は supabase/rebuild_attend_portal_tables.sql（既存データは退避したうえで作り直します）。` +
       cacheNote +
       `\n（詳細: ${parts || code}）`
     );

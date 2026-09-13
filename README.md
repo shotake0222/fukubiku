@@ -306,3 +306,8 @@ column of 'attend_portals'`）は、`supabase/repair_attend_portal.sql` を流�
 以前のバージョンで作られたテーブルが残っていると、スキーマSQLを流し直しても列は増えません。
 （現在の `schema_attend_portal.sql` には `add column if not exists` を並べてあるので、
 新しく流し直す場合はこちらだけでも直ります）
+
+列を足すSQLを流しても直らない場合は、テーブルそのものが想定と違う形で残っています。
+**`supabase/rebuild_attend_portal_tables.sql`** を流してください。
+既存の行を `attend_portals_backup` に退避したうえでテーブルを作り直し、
+最後に管理画面と同じ内容でテスト挿入まで行って「✅」を返します。
