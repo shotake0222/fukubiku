@@ -46,7 +46,10 @@ def add_badge(b, label, size=0.66):
     if not label:
         return None, None
     t = b.add_texture(tex.to_png(tex.badge_image(label), 128), "badge_%s" % label)
-    m = b.add_material("badge_%s" % label, texture=t, alpha_mode="MASK", roughness=0.55)
+    # BLEND + emissive。バッジは「文字＋光」で、光の縁がなめらかに消えるため、
+    # MASK(切り抜き)にすると光の外周に硬い輪が出てしまう。
+    m = b.add_material("badge_%s" % label, texture=t, alpha_mode="BLEND", roughness=0.9,
+                       emissive=(0.55, 0.55, 0.55), emissive_texture=True)
     mesh = b.add_mesh([G.prim(G.plane(size, size), m)], "badge")
     return mesh, m
 

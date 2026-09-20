@@ -119,70 +119,72 @@ create unique index if not exists preset_objects_model_url_idx on preset_objects
 -- ------------------------------------------------------------
 -- 4) 台帳を流し込む（これが本体）
 --
---    public/presets/ に実在する473件を登録し、既にある行は
+--    public/presets/ に実在する620件を登録し、既にある行は
 --    名前・カテゴリ・サムネ・service を正す。idは変えないので、
 --    既存の注文や抽選セットの紐付けはそのまま残る。
 --
---    shape: six    = 1等〜6等＋参加賞
---           four   = 大当たり/当たり/クーポン/はずれ＋参加賞
---           eleven = 上記すべて＋またね（2026-09に追加した24種）
---    has_mp4  : 透過MP4版があるか（この6カテゴリだけMP4素材がある）
---    has_thumb: サムネイルPNGがあるか
+--    2026-09: 全53カテゴリで 1等〜6等 と 大当たり/当たり/クーポン/はずれ の
+--    10等級すべてを選べるようにした（以前はカテゴリごとに6種または4種しか
+--    無かった）。不足していた.glbは tools/badge/expand_tiers.py が生成する。
+--    サムネイルPNGも tools/thumbs/render.py で全件そろえてある。
+--
+--    mp4_grp : 透過MP4素材がある等級グループ（この6カテゴリだけMP4がある。
+--              MP4は元の等級ぶんしか無いので、その範囲だけ登録する）
 -- ------------------------------------------------------------
-with cat(value, label, shape, has_mp4, has_thumb) as (values
-  ('amida', 'あみだくじ', 'six', true, true),
-  ('box', 'ボックス抽選', 'six', true, true),
-  ('darts', 'ダーツ', 'four', true, true),
-  ('garagara', 'ガラガラ抽選', 'four', true, true),
-  ('omikuji', 'おみくじ', 'six', true, true),
-  ('scratch', 'スクラッチ', 'four', true, true),
-  ('roulette', 'ルーレット', 'four', false, true),
-  ('dice', 'サイコロ', 'six', false, true),
-  ('treasure', '宝箱', 'four', false, true),
-  ('slot', 'スロット', 'six', false, true),
-  ('gacha', 'ガチャガチャ', 'six', false, true),
-  ('mallet', '打ち出の小槌', 'four', false, true),
-  ('cat', '招き猫', 'four', false, true),
-  ('daruma', 'だるま', 'six', false, true),
-  ('lantern', 'ランタン', 'four', false, true),
-  ('firework', '打ち上げ花火', 'four', false, true),
-  ('airlottery', 'エアー抽選機', 'six', false, true),
-  ('fan', '扇子', 'four', false, true),
-  ('pachinko', 'パチンコ', 'six', false, true),
-  ('jet', '戦闘機の的撃ち', 'four', false, true),
-  ('rocket', 'ロケット発射', 'six', false, true),
-  ('meteor', '隕石落下', 'four', false, true),
-  ('shuriken', '手裏剣ヒット', 'six', false, true),
-  ('dragon', '龍が玉を掴む', 'four', false, true),
-  ('iaido', '居合斬り', 'six', false, true),
-  ('ufo', 'UFOビーム', 'four', false, true),
-  ('cannon', '大砲・クラッカー砲', 'six', false, true),
-  ('thunder', '雷神の一撃', 'four', false, true),
-  ('punch', '超パンチ', 'six', false, true),
-  ('sankaku', '三角くじ', 'eleven', false, false),
-  ('ema', '絵馬', 'eleven', false, false),
-  ('kagamibiraki', '鏡開き', 'eleven', false, false),
-  ('xmas', 'クリスマス', 'eleven', false, false),
-  ('vending', '自動販売機', 'eleven', false, false),
-  ('receipt', 'レシート', 'eleven', false, false),
-  ('ring', '輪投げ', 'eleven', false, false),
-  ('safe', '金庫', 'eleven', false, false),
-  ('fukubukuro', '福袋', 'eleven', false, false),
-  ('sakura', '桜', 'eleven', false, false),
-  ('mamemaki', '豆まき', 'eleven', false, false),
-  ('otoshidama', 'お年玉', 'eleven', false, false),
-  ('crane', 'クレーンゲーム', 'eleven', false, false),
-  ('mogura', 'もぐらたたき', 'eleven', false, false),
-  ('bowling', 'ボウリング', 'eleven', false, false),
-  ('makimono', '巻物', 'eleven', false, false),
-  ('shateki', '射的', 'eleven', false, false),
-  ('kingyo', '金魚すくい', 'eleven', false, false),
-  ('kakigori', 'かき氷', 'eleven', false, false),
-  ('halloween', 'ハロウィン', 'eleven', false, false),
-  ('valentine', 'バレンタイン', 'eleven', false, false),
-  ('tanabata', '七夕', 'eleven', false, false),
-  ('sushi', '回転寿司', 'eleven', false, false),
-  ('taiyaki', 'たい焼き', 'eleven', false, false)
+with cat(value, label, mp4_grp) as (values
+  ('amida', 'あみだくじ', 'six'),
+  ('box', 'ボックス抽選', 'six'),
+  ('darts', 'ダーツ', 'four'),
+  ('garagara', 'ガラガラ抽選', 'four'),
+  ('omikuji', 'おみくじ', 'six'),
+  ('scratch', 'スクラッチ', 'four'),
+  ('roulette', 'ルーレット', null),
+  ('dice', 'サイコロ', null),
+  ('treasure', '宝箱', null),
+  ('slot', 'スロット', null),
+  ('gacha', 'ガチャガチャ', null),
+  ('mallet', '打ち出の小槌', null),
+  ('cat', '招き猫', null),
+  ('daruma', 'だるま', null),
+  ('lantern', 'ランタン', null),
+  ('firework', '打ち上げ花火', null),
+  ('airlottery', 'エアー抽選機', null),
+  ('fan', '扇子', null),
+  ('pachinko', 'パチンコ', null),
+  ('jet', '戦闘機の的撃ち', null),
+  ('rocket', 'ロケット発射', null),
+  ('meteor', '隕石落下', null),
+  ('shuriken', '手裏剣ヒット', null),
+  ('dragon', '龍が玉を掴む', null),
+  ('iaido', '居合斬り', null),
+  ('ufo', 'UFOビーム', null),
+  ('cannon', '大砲・クラッカー砲', null),
+  ('thunder', '雷神の一撃', null),
+  ('punch', '超パンチ', null),
+  ('sankaku', '三角くじ', null),
+  ('ema', '絵馬', null),
+  ('kagamibiraki', '鏡開き', null),
+  ('xmas', 'クリスマス', null),
+  ('vending', '自動販売機', null),
+  ('receipt', 'レシート', null),
+  ('ring', '輪投げ', null),
+  ('safe', '金庫', null),
+  ('fukubukuro', '福袋', null),
+  ('sakura', '桜', null),
+  ('mamemaki', '豆まき', null),
+  ('otoshidama', 'お年玉', null),
+  ('crane', 'クレーンゲーム', null),
+  ('mogura', 'もぐらたたき', null),
+  ('bowling', 'ボウリング', null),
+  ('makimono', '巻物', null),
+  ('shateki', '射的', null),
+  ('kingyo', '金魚すくい', null),
+  ('kakigori', 'かき氷', null),
+  ('halloween', 'ハロウィン', null),
+  ('valentine', 'バレンタイン', null),
+  ('tanabata', '七夕', null),
+  ('sushi', '回転寿司', null),
+  ('taiyaki', 'たい焼き', null)
 ),
 tier(key, ja, grp) as (values
   ('1tou',    '1等',     'six'),
@@ -198,29 +200,37 @@ tier(key, ja, grp) as (values
   ('cookie',  null,      'cookie')
 ),
 pair as (
-  select c.value, c.label, c.has_mp4, c.has_thumb, t.key,
-         -- クールダウン中に出すオブジェクトの呼び名は追加時期で違う
-         coalesce(t.ja, case when c.shape = 'eleven' then 'またね' else '参加賞' end) as tier_ja
+  -- どのカテゴリでも 1等〜6等 と 大当たり/当たり/クーポン/はずれ の
+  -- 10種すべてを選べるようにする(不足していた.glbは
+  -- tools/badge/expand_tiers.py で生成済み)。
+  -- cookie は「参加賞」。どのカテゴリの <cat>_cookie_3d.glb も
+  -- 「参加賞」のバッジが入っているので、呼び名をそれに揃える。
+  select c.value, c.label, c.mp4_grp, t.key, t.grp,
+         coalesce(t.ja, '参加賞') as tier_ja
     from cat c
-    join tier t
-      on t.grp = 'cookie'
-      or c.shape = 'eleven'
-      or c.shape = t.grp
+    join tier t on true
 ),
 catalog(name, category, model_url, thumbnail_url) as (
+  -- 3Dオブジェクト。サムネイルは tools/thumbs/render.py が全件生成済み。
   select p.label || ' - ' || p.tier_ja || '（3Dオブジェクト）',
          p.value,
          '/presets/' || p.value || '/' || p.value || '_' || p.key || '_3d.glb',
-         case when p.has_thumb
-              then '/presets/' || p.value || '/' || p.value || '_' || p.key || '_3d_thumb.png' end
+         '/presets/' || p.value || '/' || p.value || '_' || p.key || '_3d_thumb.png'
     from pair p
   union all
+  -- 透過MP4。元からMP4素材があるカテゴリの、素材が実在する等級だけ。
   select p.label || ' - ' || p.tier_ja,
          p.value,
          '/presets/' || p.value || '/' || p.value || '_' || p.key || '.mp4',
          null
     from pair p
-   where p.has_mp4
+   where p.mp4_grp is not null
+     and (p.grp = p.mp4_grp or p.grp = 'cookie')
+  union all
+  -- 全カテゴリ共通の「またね」(クールダウン中の表示)
+  select '共通 - またね（3Dオブジェクト）', 'common',
+         '/presets/common/common_cookie_3d.glb',
+         '/presets/common/common_cookie_3d_thumb.png'
 )
 insert into preset_objects (name, category, model_url, thumbnail_url, service)
 select c.name, c.category, c.model_url, c.thumbnail_url, 'fukubiku'
@@ -263,8 +273,8 @@ delete from preset_objects p
 -- ------------------------------------------------------------
 -- 7) 結果の確認
 -- ------------------------------------------------------------
--- fukubiku_total が 473、gif_remaining と absolute_url_remaining と
--- service_null_remaining が 0 なら成功。
+-- fukubiku_total が 620（glb 584 + mp4 36）、gif_remaining と
+-- absolute_url_remaining と service_null_remaining が 0 なら成功。
 select
   count(*) filter (where service = 'fukubiku')                      as fukubiku_total,
   count(*) filter (where service = 'fukubiku' and model_url like '%.glb') as glb,
@@ -274,8 +284,9 @@ select
   count(*) filter (where service is null)                           as service_null_remaining
 from preset_objects;
 
--- カテゴリごとの内訳。53カテゴリが並び、glbが5〜11件、
--- amida/box/omikuji が7+7、darts/garagara/scratch が5+5 なら正常。
+-- カテゴリごとの内訳。53カテゴリ＋common が並び、
+-- 各カテゴリ glb=11、amida/box/omikuji は mp4=7、
+-- darts/garagara/scratch は mp4=5、common は glb=1 なら正常。
 select category,
        count(*)                                       as total,
        count(*) filter (where model_url like '%.glb') as glb,

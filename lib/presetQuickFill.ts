@@ -32,6 +32,28 @@ export const KNOWN_TIER_LABELS = [
 const SIX_TIER_WITH_BONUS = [...TIER_LABELS_6, "参加賞"];
 const FOUR_TIER_WITH_BONUS = [...TIER_LABELS_4, "参加賞"];
 
+// 景品の段階。2026-09 以降はどのカテゴリでも両方のテンプレートがそろっている
+// (tools/badge/expand_tiers.py が不足ぶんを生成し、
+//  supabase/rebuild_preset_catalog.sql が台帳に登録する)。
+// QUICK_FILL はあくまで「そのカテゴリを選んだときの初期表示」でしかない。
+export type TierSet = "six" | "four";
+
+export const TIER_SET_LABEL: Record<TierSet, string> = {
+  six: "1等〜6等",
+  four: "大当たり・当たり・クーポン・はずれ",
+};
+
+// 段階を明示的に選んだときに並べる景品名。
+export function tierSetLabels(set: TierSet): string[] {
+  return set === "four" ? FOUR_TIER_WITH_BONUS : SIX_TIER_WITH_BONUS;
+}
+
+// カテゴリの既定の段階(これまでの初期表示を変えないための表)。
+export function defaultTierSet(category: string): TierSet {
+  const labels = QUICK_FILL[category];
+  return labels && labels.includes("大当たり") ? "four" : "six";
+}
+
 export const QUICK_FILL: Record<string, string[]> = {
   amida: SIX_TIER_WITH_BONUS,
   box: SIX_TIER_WITH_BONUS,
@@ -102,7 +124,15 @@ function inCategory(p: PresetObject, category: string): boolean {
 // QUICK_FILL に無いカテゴリ(あとから PRESET_CATEGORIES にだけ追加された場合や、
 // 手動で登録した独自カテゴリ)でも空にならないよう、実際に登録されている
 // テンプレート名から景品名を拾って並べる。
-export function quickFillLabels(presets: PresetObject[], category: string): string[] {
+export function quickFillLabels(
+  presets: PresetObject[],
+  category: string,
+  tierSet?: TierSet | null
+): string[] {
+  // 段階を指定されたらそれに従う(どのカテゴリでも両方そろっているため、
+  // カテゴリごとの既定に縛られる必要はない)。
+  if (tierSet) return tierSetLabels(tierSet);
+
   const explicit = QUICK_FILL[category];
   if (explicit && explicit.length > 0) return explicit;
 

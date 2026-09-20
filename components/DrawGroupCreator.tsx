@@ -15,7 +15,7 @@ import {
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
 import CategoryChips from "@/components/CategoryChips";
 import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
-import { quickFillLabels } from "@/lib/presetQuickFill";
+import { quickFillLabels, defaultTierSet, type TierSet } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
 
@@ -86,6 +86,10 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
   // テンプレートを行ごとに個別設定できるのはあくまで例外的な機能として折りたたんでおく。
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<FormatPref>(null);
+  // 景品の段階(1等〜6等 / 大当たり〜はずれ)。
+  // 2026-09 以降はどのカテゴリでも両方のテンプレートがそろっているので、
+  // カテゴリとは独立に選べるようにしている。
+  const [tierSet, setTierSet] = useState<TierSet | null>(null);
   const [advancedMode, setAdvancedMode] = useState(false);
 
   const [rows, setRows] = useState<Row[]>([newRow(), newRow(), newRow()]);
@@ -109,10 +113,12 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
 
   // カテゴリを選ぶと、そのカテゴリの定番の景品名で行を埋め、それぞれ該当するテンプレートを
   // 自動で割り当てる(名前に景品名を含むテンプレートを探す。3Dオブジェクト版があれば優先)。
-  function selectCategory(category: string, format: FormatPref = null) {
+  function selectCategory(category: string, format: FormatPref = null, set?: TierSet | null) {
+    const chosen = set ?? tierSet ?? defaultTierSet(category);
     setSelectedCategory(category);
     setSelectedFormat(format);
-    const labels = quickFillLabels(presets, category);
+    setTierSet(chosen);
+    const labels = quickFillLabels(presets, category, chosen);
     setRows(
       labels.map((label) => {
         const row = newRow(label);
@@ -388,6 +394,11 @@ export default function DrawGroupCreator({ presets }: { presets: PresetObject[] 
           selectedCategory={selectedCategory}
           selectedFormat={selectedFormat}
           onSelect={(c, f) => selectCategory(c, f ?? null)}
+          tierSet={tierSet ?? (selectedCategory ? defaultTierSet(selectedCategory) : "six")}
+          onTierSetChange={(s) => {
+            setTierSet(s);
+            if (selectedCategory) selectCategory(selectedCategory, selectedFormat, s);
+          }}
         />
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />

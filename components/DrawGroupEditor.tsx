@@ -10,7 +10,7 @@ import { DEFAULT_TIER_WEIGHTS } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
 import CategoryChips from "@/components/CategoryChips";
 import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
-import { quickFillLabels } from "@/lib/presetQuickFill";
+import { quickFillLabels, defaultTierSet, type TierSet } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
 
@@ -108,6 +108,10 @@ export default function DrawGroupEditor({
     entries.length ? entries.map(rowFromEntry) : [newRow(), newRow(), newRow()]
   );
   const [removedIds, setRemovedIds] = useState<string[]>([]);
+  // 景品の段階(1等〜6等 / 大当たり〜はずれ)。
+  // 2026-09 以降はどのカテゴリでも両方のテンプレートがそろっているので、
+  // カテゴリとは独立に選べるようにしている。
+  const [tierSet, setTierSet] = useState<TierSet | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -139,14 +143,16 @@ export default function DrawGroupEditor({
   // カテゴリボタンを押すと、現在の景品リストをそのカテゴリの定番の景品名一式に丸ごと
   // 置き換える(テンプレートも自動で再設定される)。カテゴリを間違えて作成した場合の
   // やり直し用。既存の行を個別に少し直したいだけなら「詳細設定」を使う。
-  function resetToCategory(category: string, format: FormatPref = null) {
+  function resetToCategory(category: string, format: FormatPref = null, set?: TierSet | null) {
     if (
       rows.some((r) => r.label || r.presetObjectId || r.customModelUrl) &&
       !confirm("現在の景品リストを、選んだカテゴリの定番リストで置き換えます。よろしいですか？")
     ) {
       return;
     }
-    const labels = quickFillLabels(presets, category);
+    const chosen = set ?? tierSet ?? defaultTierSet(category);
+    setTierSet(chosen);
+    const labels = quickFillLabels(presets, category, chosen);
     const removedExisting = rows.filter((r) => !r.isNew).map((r) => r.id);
     setRemovedIds((prev) => [...prev, ...removedExisting]);
     setRows(
@@ -397,6 +403,8 @@ export default function DrawGroupEditor({
           showSelection={false}
           onSelect={(c, f) => resetToCategory(c, f ?? null)}
           suffix="でやり直す"
+          tierSet={tierSet ?? "six"}
+          onTierSetChange={(s) => setTierSet(s)}
         />
         <label className="flex items-center gap-2 text-sm border-t pt-3">
           <input type="checkbox" checked={advancedMode} onChange={(e) => setAdvancedMode(e.target.checked)} />

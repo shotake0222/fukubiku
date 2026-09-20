@@ -86,6 +86,11 @@ export function resolvePresetForTier(
   if (formatPref === "flat") {
     // 平面版はMP4を最優先する。GIFはモバイル(特にiOS)で再生されないことが多く、
     // 過去のGIF資産が残っているカテゴリでGIFが選ばれると「表示されない」不具合になる。
+    //
+    // 2026-09: 全カテゴリで10等級を選べるようにしたが、透過MP4の素材は
+    // 元からある等級ぶんしか無い(MP4はBlenderからの書き出しで、あとから
+    // 増やせない)。MP4が無い等級では3Dオブジェクト版へ自動的に下がる。
+    // 「テンプレートが見つかりません」にはならない。
     return candidates.find(isMp4) ?? candidates.find(isFlat) ?? candidates[0];
   }
   if (formatPref === "glb") {

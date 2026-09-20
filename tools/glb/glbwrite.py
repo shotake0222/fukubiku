@@ -75,7 +75,8 @@ class Builder:
         return len(self.textures) - 1
 
     def add_material(self, name, color=(1, 1, 1, 1), texture=None, roughness=0.6,
-                     metallic=0.0, alpha_mode="OPAQUE", double_sided=True, emissive=None):
+                     metallic=0.0, alpha_mode="OPAQUE", double_sided=True, emissive=None,
+                     emissive_texture=False):
         pbr = {"baseColorFactor": list(color), "metallicFactor": metallic, "roughnessFactor": roughness}
         if texture is not None:
             pbr["baseColorTexture"] = {"index": texture}
@@ -86,6 +87,10 @@ class Builder:
                 m["alphaCutoff"] = 0.5
         if emissive:
             m["emissiveFactor"] = list(emissive)
+        if emissive_texture and texture is not None:
+            # ベースカラーと同じ絵を自己発光にも使う。照明に左右されず、
+            # カメラ映像の上でも文字がはっきり浮かぶ。
+            m["emissiveTexture"] = {"index": texture}
         self.materials.append(m)
         return len(self.materials) - 1
 
@@ -186,7 +191,7 @@ def box(w=1.0, h=1.0, d=1.0):
     return dict(positions=pos, normals=nrm, uvs=uv, indices=idx)
 
 
-def cylinder(r=0.5, h=1.0, seg=24, caps=True, r_top=None):
+def cylinder(r=0.5, h=1.0, seg=48, caps=True, r_top=None):
     r_top = r if r_top is None else r_top
     pos, nrm, uv, idx = [], [], [], []
     for i in range(seg + 1):
@@ -216,7 +221,7 @@ def cylinder(r=0.5, h=1.0, seg=24, caps=True, r_top=None):
     return dict(positions=pos, normals=nrm, uvs=uv, indices=idx)
 
 
-def disc(r=0.5, seg=24):
+def disc(r=0.5, seg=48):
     pos = [(0, 0, 0)]
     nrm = [(0, 0, 1)]
     uv = [(0.5, 0.5)]
@@ -231,7 +236,7 @@ def disc(r=0.5, seg=24):
     return dict(positions=pos, normals=nrm, uvs=uv, indices=idx)
 
 
-def torus(r=0.5, tube=0.12, seg=20, tseg=10):
+def torus(r=0.5, tube=0.12, seg=48, tseg=20):
     pos, nrm, uv, idx = [], [], [], []
     for i in range(seg + 1):
         a = 2 * math.pi * i / seg
@@ -277,7 +282,7 @@ def poly(points, uv_box=None):
     return dict(positions=pos, normals=[(0, 0, 1)] * len(points), uvs=uvs, indices=idx)
 
 
-def semicircle(r=0.5, seg=18, side=1, uv_box=None):
+def semicircle(r=0.5, seg=36, side=1, uv_box=None):
     """半円(side=1で右半分、-1で左半分)。中心が原点。"""
     pts = [(0.0, -r)]
     for i in range(seg + 1):
@@ -288,7 +293,7 @@ def semicircle(r=0.5, seg=18, side=1, uv_box=None):
     return poly(pts, uv_box or (-r, -r, r, r))
 
 
-def ring(r_out=0.5, r_in=0.35, seg=32):
+def ring(r_out=0.5, r_in=0.35, seg=64):
     """平らなドーナツ(+Z向き)。"""
     pos, nrm, uv, idx = [], [], [], []
     for i in range(seg + 1):
@@ -303,7 +308,7 @@ def ring(r_out=0.5, r_in=0.35, seg=32):
     return dict(positions=pos, normals=nrm, uvs=uv, indices=idx)
 
 
-def sphere(r=0.5, seg=16, rings=10):
+def sphere(r=0.5, seg=32, rings=20):
     pos, nrm, uv, idx = [], [], [], []
     for j in range(rings + 1):
         v = j / rings

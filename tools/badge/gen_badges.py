@@ -1,149 +1,172 @@
 # -*- coding: utf-8 -*-
 """結果バッジ(1等 / 当たり / 参加賞 など)のテクスチャを生成する。
 #
-# 既存のバッジは単色のベタ塗りで、カメラ映像の上に出すと安っぽく見えていた。
-# ここでは同じ星形のシルエットを保ちつつ、
-#   ・中心から外へのグラデーション(金属的な面)
-#   ・濃色の外縁(カメラ映像の上でもシルエットが立つ)
-#   ・上半分のツヤ
-#   ・落ち影
-#   ・縁取り付きの文字
-# を加えて情報量を増やす。ランクごとに金/銀/銅などへ色を変え、序列が一目で分かるようにする。
+# 【2026-09 改訂】
+# 以前はトゲトゲの星形(16角)を描き、その上に文字を載せていた。
+# 星の形そのものが古く見えるうえ、旧カテゴリのモデルでは星の裏に
+# 「単色の四角い板(badge_*_rim マテリアル)」が入っていて、
+# 星の谷間からその四角がのぞいて見えるという問題もあった。
+#
+# そこで形のある装飾はすべて捨て、
+#   ・結果の文字
+#   ・文字を際立たせる光(グロー)
+# だけで構成する。背景は完全な透明なので、カメラ映像の上に
+# 文字だけが浮かび上がる。
+#
+# 構成(奥→手前):
+#   1. 暗い柔らかい敷き(明るい背景でも文字が沈まないようにする)
+#   2. ランク色の外側グロー(金/銀/銅…で序列が一目で分かる)
+#   3. 白に近い内側グロー(文字のすぐ後ろを明るくしてコントラストを稼ぐ)
+#   4. 文字の落ち影
+#   5. 文字本体(白 + ランク色の縁取り)
+#
+# 透明度がなめらかに変化するので、マテリアルは MASK ではなく BLEND で使う。
+# (apply_badges.py が .glb 側の設定も合わせて書き換える)
 #
 # 使い方: python3 tools/badge/gen_badges.py [出力先ディレクトリ]
 """
 import math, os, sys
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-SIZE = 512
+# 512→1024。文字の輪郭が近距離でもなめらかになる(「ディテールが甘い」対策)。
+SIZE = 1024          # 描画時の解像度(この大きさで描いてから縮める)
+OUT_SIZE = 512       # .glbへ埋め込む解像度
 C = SIZE // 2
 FONT_PATH = "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
 
-# ランクごとの配色。f1→f3 が面のグラデーション、rim が外縁。
+# ランクごとの配色。
+#   glow : 外側グローの色(ランクの識別色)
+#   core : 文字のすぐ後ろを明るくする色
+#   ts   : 文字の縁取り色(濃いめ。白文字とのコントラストを作る)
 THEMES = {
-    "gold":   dict(f1=(255, 251, 230), f2=(255, 212, 59),  f3=(232, 147, 12),
-                   rim=(179, 38, 30),  rim2=(124, 20, 15),  ring=(255, 233, 168), ts=(124, 45, 18)),
-    "silver": dict(f1=(255, 255, 255), f2=(220, 230, 239), f3=(147, 168, 188),
-                   rim=(63, 81, 99),   rim2=(38, 51, 63),   ring=(242, 247, 251), ts=(38, 51, 63)),
-    "bronze": dict(f1=(255, 240, 222), f2=(233, 168, 99),  f3=(185, 108, 36),
-                   rim=(107, 52, 16),  rim2=(72, 34, 10),   ring=(255, 217, 174), ts=(90, 43, 12)),
-    "red":    dict(f1=(255, 233, 230), f2=(248, 113, 113), f3=(192, 39, 28),
-                   rim=(110, 18, 12),  rim2=(74, 11, 7),    ring=(255, 210, 206), ts=(92, 15, 10)),
-    "teal":   dict(f1=(234, 251, 247), f2=(94, 201, 185),  f3=(23, 128, 111),
-                   rim=(11, 74, 64),   rim2=(6, 50, 43),    ring=(189, 237, 228), ts=(11, 74, 64)),
-    "slate":  dict(f1=(247, 250, 252), f2=(185, 198, 211), f3=(122, 139, 155),
-                   rim=(58, 72, 85),   rim2=(35, 46, 56),   ring=(230, 237, 243), ts=(42, 53, 64)),
+    "gold":   dict(glow=(255, 186, 26),  core=(255, 246, 214), ts=(140, 62, 8)),
+    "silver": dict(glow=(176, 202, 226), core=(246, 251, 255), ts=(46, 62, 78)),
+    "bronze": dict(glow=(228, 146, 66),  core=(255, 236, 214), ts=(104, 50, 14)),
+    "red":    dict(glow=(248, 84, 74),   core=(255, 226, 222), ts=(112, 16, 11)),
+    "teal":   dict(glow=(46, 196, 176),  core=(224, 252, 247), ts=(8, 78, 68)),
+    "slate":  dict(glow=(150, 172, 192), core=(240, 246, 251), ts=(40, 54, 66)),
 }
 RANK = {
     "大当たり": "gold", "1等": "gold", "当たり": "gold",
     "2等": "silver", "3等": "bronze", "4等": "red", "5等": "teal", "6等": "teal",
     "クーポン": "red", "はずれ": "slate", "参加賞": "slate",
+    "またね": "slate",
 }
-LABELS = ["大当たり", "1等", "2等", "3等", "4等", "5等", "6等", "当たり", "クーポン", "はずれ", "参加賞"]
-
-POINTS = 16
-
-
-def star(cx, cy, r_out, r_in, n=POINTS):
-    pts = []
-    for i in range(n * 2):
-        a = math.pi * i / n - math.pi / 2
-        r = r_out if i % 2 == 0 else r_in
-        pts.append((cx + math.cos(a) * r, cy + math.sin(a) * r))
-    return pts
+LABELS = ["大当たり", "1等", "2等", "3等", "4等", "5等", "6等", "当たり",
+          "クーポン", "はずれ", "参加賞", "またね"]
 
 
-def radial_fill(size, c1, c2, c3, cx_ratio=0.40, cy_ratio=0.32, radius_ratio=0.76):
-    """中心をずらした放射グラデーション。上寄りに光源があるように見せる。"""
-    img = Image.new("RGB", (size, size))
-    px = img.load()
-    cx, cy = size * cx_ratio, size * cy_ratio
-    rmax = size * radius_ratio
-    for y in range(size):
-        dy = y - cy
-        for x in range(size):
-            t = math.hypot(x - cx, dy) / rmax
-            if t > 1.0:
-                t = 1.0
-            if t < 0.30:
-                k = t / 0.30
-                col = tuple(int(c1[i] + (c2[i] - c1[i]) * k) for i in range(3))
+def radial_alpha(radius, inner=0.0, peak=255, gamma=2.0):
+    """中心が最も濃く、radius で 0 になる円形のアルファマスクを作る。
+
+    gamma を上げるほど中心付近だけが濃く残り、外へすっと消える。
+    ガウシアンぼかしを何度もかけるより速く、かつ端が完全に0になるので
+    テクスチャの縁に線が出ない。
+    """
+    m = Image.new("L", (SIZE, SIZE), 0)
+    px = m.load()
+    r2 = radius * radius
+    for y in range(SIZE):
+        dy = y - C
+        dy2 = dy * dy
+        if dy2 > r2:
+            continue
+        span = int(math.sqrt(r2 - dy2))
+        for x in range(C - span, C + span + 1):
+            dx = x - C
+            t = math.sqrt(dx * dx + dy2) / radius
+            if t <= inner:
+                v = peak
             else:
-                k = (t - 0.30) / 0.70
-                k = k * k * (3 - 2 * k)  # なめらかに外側へ落とす
-                col = tuple(int(c2[i] + (c3[i] - c2[i]) * k) for i in range(3))
-            px[x, y] = col
-    return img
+                k = (t - inner) / (1.0 - inner)
+                v = int(peak * ((1.0 - k) ** gamma))
+            if v > 0:
+                px[x, y] = v
+    return m
 
 
-def vertical_fill(size, top, bottom):
-    img = Image.new("RGB", (size, size))
-    d = ImageDraw.Draw(img)
-    for y in range(size):
-        k = y / max(size - 1, 1)
-        d.line([(0, y), (size, y)],
-               fill=tuple(int(top[i] + (bottom[i] - top[i]) * k) for i in range(3)))
-    return img
+def _fit_font(text, max_w, max_h, start=int(SIZE * 0.42)):
+    probe = ImageDraw.Draw(Image.new("L", (8, 8)))
+    size_pt = start
+    while size_pt > 40:
+        font = ImageFont.truetype(FONT_PATH, size_pt)
+        l, t, r, b = probe.textbbox((0, 0), text, font=font)
+        if (r - l) <= max_w and (b - t) <= max_h:
+            return font
+        size_pt -= 4
+    return ImageFont.truetype(FONT_PATH, size_pt)
 
 
 def make_badge(text, theme):
     th = THEMES[theme]
     base = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
 
-    # --- 落ち影(外縁のシルエットをぼかして下にずらす) ---
-    shadow_mask = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(shadow_mask).polygon(star(C, C + 8, 246, 176), fill=115)
-    shadow_mask = shadow_mask.filter(ImageFilter.GaussianBlur(9))
-    base.paste((0, 0, 0, 255), (0, 0), shadow_mask)
+    # --- 1) ランク色の外側グロー ---------------------------------------
+    # 金/銀/銅… で序列が一目で分かるようにする。中心を濃く、外へすっと消す。
+    outer = radial_alpha(SIZE * 0.45, inner=0.03, peak=225, gamma=2.6)
+    base.paste(th["glow"] + (255,), (0, 0), outer)
 
-    # --- 外縁 ---
-    rim_mask = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(rim_mask).polygon(star(C, C, 246, 176), fill=255)
-    base.paste(vertical_fill(SIZE, th["rim"], th["rim2"]), (0, 0), rim_mask)
+    # --- 2) 内側の明るいコア -------------------------------------------
+    core = radial_alpha(SIZE * 0.24, inner=0.02, peak=240, gamma=1.8)
+    base.paste(th["core"] + (255,), (0, 0), core)
 
-    # --- 面 ---
-    face_mask = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(face_mask).polygon(star(C, C, 214, 152), fill=255)
-    base.paste(radial_fill(SIZE, th["f1"], th["f2"], th["f3"]), (0, 0), face_mask)
+    # --- 3) 文字を組む --------------------------------------------------
+    max_w, max_h = int(SIZE * 0.66), int(SIZE * 0.31)
+    font = _fit_font(text, max_w, max_h)
+    size_pt = font.size
+    stroke = max(8, int(size_pt * 0.10))
 
-    # --- 内側の細いリング ---
-    ring = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
-    ImageDraw.Draw(ring).polygon(star(C, C, 188, 134), outline=th["ring"] + (180,), width=3)
-    base.alpha_composite(ring)
-
-    # --- 上半分のツヤ(面の内側だけに乗せる) ---
-    gloss = Image.new("L", (SIZE, SIZE), 0)
-    ImageDraw.Draw(gloss).ellipse([C - 250, 40 - 150, C + 250, 40 + 150], fill=255)
-    grad = Image.new("L", (SIZE, SIZE))
-    gd = ImageDraw.Draw(grad)
-    for y in range(SIZE):
-        gd.line([(0, y), (SIZE, y)], fill=max(0, int(78 * (1 - y / 250.0))))
-    gloss = Image.composite(grad, Image.new("L", (SIZE, SIZE), 0), gloss)
-    gloss = Image.composite(gloss, Image.new("L", (SIZE, SIZE), 0), face_mask)
-    gloss = gloss.filter(ImageFilter.GaussianBlur(22))
-    base.paste((255, 255, 255, 255), (0, 0), gloss)
-
-    # --- 文字(星の内側に必ず収まるよう実測して縮める) ---
-    max_w, max_h = 268, 168
-    size_pt = 190
-    while size_pt > 40:
-        font = ImageFont.truetype(FONT_PATH, size_pt)
-        l, t, r, b = ImageDraw.Draw(base).textbbox((0, 0), text, font=font)
-        if (r - l) <= max_w and (b - t) <= max_h:
-            break
-        size_pt -= 4
-    font = ImageFont.truetype(FONT_PATH, size_pt)
-    stroke = max(6, int(size_pt * 0.085))
-    d = ImageDraw.Draw(base)
-    l, t, r, b = d.textbbox((0, 0), text, font=font, stroke_width=stroke)
+    probe = ImageDraw.Draw(Image.new("L", (8, 8)))
+    l, t, r, b = probe.textbbox((0, 0), text, font=font, stroke_width=stroke)
     x = C - (r - l) / 2 - l
     y = C - (b - t) / 2 - t
-    # 文字の落ち影
-    d.text((x, y + max(2, int(size_pt * 0.045))), text, font=font, fill=(0, 0, 0, 70),
-           stroke_width=stroke, stroke_fill=(0, 0, 0, 70))
+
+    # 文字のシルエットをぼかした「影」。円い板ではなく文字の形に沿うので、
+    # グローの色を濁らせずにコントラストだけを稼げる。
+    silhouette = Image.new("L", (SIZE, SIZE), 0)
+    ImageDraw.Draw(silhouette).text((x, y), text, font=font, fill=255,
+                                    stroke_width=int(stroke * 2.1), stroke_fill=255)
+    halo = silhouette.filter(ImageFilter.GaussianBlur(SIZE / 90.0))
+    halo = halo.point(lambda v: min(255, int(v * 1.25)))
+    base.paste((8, 12, 20, 255), (0, 0), halo)
+
+    # --- 4) 文字本体 ----------------------------------------------------
+    d = ImageDraw.Draw(base)
+    d.text((x, y + max(3, int(size_pt * 0.035))), text, font=font,
+           fill=(0, 0, 0, 90), stroke_width=stroke, stroke_fill=(0, 0, 0, 90))
     d.text((x, y), text, font=font, fill=(255, 255, 255, 255),
            stroke_width=stroke, stroke_fill=th["ts"] + (255,))
+
+    # --- 仕上げ: テクスチャの縁は必ず透明にする ------------------------
+    # (BLENDで描くので、端に色が残っていると四角い板に見えてしまう)
+    edge = Image.new("L", (SIZE, SIZE), 0)
+    ImageDraw.Draw(edge).ellipse([2, 2, SIZE - 3, SIZE - 3], fill=255)
+    edge = edge.filter(ImageFilter.GaussianBlur(SIZE / 128.0))
+    base.putalpha(Image.composite(base.getchannel("A"),
+                                  Image.new("L", (SIZE, SIZE), 0), edge))
     return base
+
+
+def dither(img, amp=3):
+    """減色前にごく弱いノイズを足す。
+
+    グローはなめらかな階調なので、そのまま減色すると同心円状の縞(バンディング)
+    が出る。1〜3階調ぶんのノイズを混ぜておくと縞が視覚的に散って消える。
+    """
+    import random
+    rnd = random.Random(1234)
+    px = img.load()
+    w, h = img.size
+    for y in range(h):
+        for x in range(w):
+            r, g, b, a = px[x, y]
+            if a == 0:
+                continue
+            n = rnd.randint(-amp, amp)
+            px[x, y] = (max(0, min(255, r + n)), max(0, min(255, g + n)),
+                        max(0, min(255, b + n)),
+                        max(0, min(255, a + rnd.randint(-amp, amp))))
+    return img
 
 
 def main():
@@ -151,9 +174,12 @@ def main():
     os.makedirs(outdir, exist_ok=True)
     for label in LABELS:
         img = make_badge(label, RANK.get(label, "gold"))
-        # GLBに埋め込むためファイルサイズを抑える。
+        # GLBに埋め込むのでファイルサイズを抑える。
         # FASTOCTREEはアルファを保持したまま減色できる。
-        img = img.quantize(colors=128, method=Image.FASTOCTREE)
+        # 1024で描いてから512へ縮める(スーパーサンプリング)。
+        # 直接512で描くより文字の輪郭がなめらかになり、かつファイルは小さい。
+        img = img.resize((OUT_SIZE, OUT_SIZE), Image.LANCZOS)
+        img = dither(img, 1).quantize(colors=255, method=Image.FASTOCTREE)
         path = os.path.join(outdir, "badge_%s.png" % label)
         img.save(path, "PNG", optimize=True)
         print(path, os.path.getsize(path) // 1024, "KB")

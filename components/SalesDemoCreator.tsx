@@ -13,7 +13,7 @@ import {
 import { PresetPreview } from "@/components/TemplatePicker";
 import CategoryChips from "@/components/CategoryChips";
 import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
-import { quickFillLabels } from "@/lib/presetQuickFill";
+import { quickFillLabels, defaultTierSet, type TierSet } from "@/lib/presetQuickFill";
 
 const ASSET_BUCKET = "assets";
 
@@ -72,6 +72,10 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
 
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<FormatPref>(null);
+  // 景品の段階(1等〜6等 / 大当たり〜はずれ)。
+  // 2026-09 以降はどのカテゴリでも両方のテンプレートがそろっているので、
+  // カテゴリとは独立に選べるようにしている。
+  const [tierSet, setTierSet] = useState<TierSet | null>(null);
 
   const [rows, setRows] = useState<Row[]>([]);
 
@@ -100,10 +104,12 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
     setRows((prev) => prev.filter((r) => r.id !== id));
   }
 
-  function selectCategory(category: string, format: FormatPref = null) {
+  function selectCategory(category: string, format: FormatPref = null, set?: TierSet | null) {
+    const chosen = set ?? tierSet ?? defaultTierSet(category);
     setSelectedCategory(category);
     setSelectedFormat(format);
-    const labels = quickFillLabels(presets, category);
+    setTierSet(chosen);
+    const labels = quickFillLabels(presets, category, chosen);
     setRows(
       labels.map((label) => {
         const row = newRow(label);
@@ -245,6 +251,11 @@ export default function SalesDemoCreator({ presets }: { presets: PresetObject[] 
           selectedCategory={selectedCategory}
           selectedFormat={selectedFormat}
           onSelect={(c, f) => selectCategory(c, f ?? null)}
+          tierSet={tierSet ?? (selectedCategory ? defaultTierSet(selectedCategory) : "six")}
+          onTierSetChange={(s) => {
+            setTierSet(s);
+            if (selectedCategory) selectCategory(selectedCategory, selectedFormat, s);
+          }}
         />
       </section>
 

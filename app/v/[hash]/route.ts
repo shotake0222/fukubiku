@@ -34,6 +34,24 @@ export const dynamic = "force-dynamic";
 const AR_OBJECTS_SRC = "/ar/ar-objects.js";
 const AR_BOOT_SRC = "/ar/ar-boot.js";
 
+// <a-scene renderer="..."> に渡す描画設定。
+//
+// A-Frameはモバイルだと antialias を既定でオフにする(実装: setupRenderer の
+// antialias:!isMobile)。オフだとポリゴンの輪郭が階段状になり、端末を少し
+// 動かすだけでその階段がチラチラと動く(いわゆる「ガビガビ」)。
+// 近年の端末はMSAAをタイル内で処理できるので、明示的にオンにする。
+//
+//  antialias   : 輪郭のギザギザを消す。ガビガビ対策の本命。
+//  precision   : シェーダの計算精度。既定はモバイルでmediumpになることがあり、
+//                グラデーションに縞が出る。highpを要求する。
+//  colorManagement / physicallyCorrectLights: 従来どおり(色味を変えない)。
+//  maxCanvasWidth/Height: 既定1920。高精細端末で描画解像度が足りず
+//                ぼやける/ジャギーが目立つ原因になるので2560まで許可する。
+//                (実際の倍率は cap-pixel-ratio が2倍で頭打ちにしている)
+const RENDERER_ATTR =
+  "antialias: true; precision: high; colorManagement: true;" +
+  " physicallyCorrectLights: true; maxCanvasWidth: 2560; maxCanvasHeight: 2560";
+
 // マーカーの姿勢を「マーカーの外側にある別エンティティ(ステージ)」へ写して描画する。
 //
 // AR.jsは検出処理のたびに、その回で検出できなかったマーカーのobject3D.visibleを
@@ -212,10 +230,16 @@ function suspenseUrlFor(category: string | null): string | null {
 }
 
 // クールダウン中(=すでに抽選済み)に表示する「またね」モデル。
-// 旧実装(index.html)でCookie保持時に <カテゴリ>_cookie.mp4 を出していたのと同じ役割。
-function cookieUrlFor(category: string | null): string | null {
-  if (!category || !CATEGORY_SLUGS.has(category)) return null;
-  return "/presets/" + category + "/" + category + "_cookie_3d.glb";
+//
+// 以前はカテゴリごとに <カテゴリ>_cookie_3d.glb を用意していたが、
+// これは抽選結果ではなく「まだ引けません」というお知らせなので、
+// カテゴリによって見た目が変わる必要がない。
+// 全モデル共通の1つに統一する(再表示までの時間は抽選セット/案件ごとに
+// cooldown_hours で指定でき、その指定はこれまでどおり効く)。
+const COMMON_COOKIE_URL = "/presets/common/common_cookie_3d.glb";
+
+function cookieUrlFor(_category: string | null): string | null {
+  return COMMON_COOKIE_URL;
 }
 
 // 透過MP4/画像のURLから、同じ景品の3Dモデル版(.glb)のURLを導く。
@@ -369,9 +393,9 @@ function buildArHtml(opts: {
 
   const sceneMarkup = opts.useMindAr
     ? '<a-scene mindar-image="imageTargetSrc: ' + esc(opts.mindFileUrl || "") + '; uiScanning: no; uiLoading: no;"' +
-      ' color-space="sRGB" renderer="colorManagement: true, physicallyCorrectLights"' +
+      ' color-space="sRGB" renderer="' + RENDERER_ATTR + '"' +
       ' vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"' +
-      ' cap-pixel-ratio>' +
+      ' cap-pixel-ratio crisp-textures>' +
       '<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>' +
       '<a-entity id="ar-target" mindar-image-target="targetIndex: 0"' + poseAttr + "></a-entity>" +
       stageMarkup +
@@ -387,7 +411,8 @@ function buildArHtml(opts: {
       // 検出間のフレームはmarker-pose側の補間が埋めるので見た目は滑らかになる。
       ' arjs="debugUIEnabled:false; trackingMethod:best; patternRatio: 0.9;' +
       ' maxDetectionRate: 30; cameraParametersUrl: /vendor/camera_para.dat;"' +
-      ' vr-mode-ui="enabled: false" cap-pixel-ratio>' +
+      ' color-space="sRGB" renderer="' + RENDERER_ATTR + '"' +
+      ' vr-mode-ui="enabled: false" cap-pixel-ratio crisp-textures>' +
       '<a-marker id="ar-target" preset="custom" type="pattern" url="' + esc(opts.markerUrl) + '"' +
       poseAttr + "></a-marker>" +
       stageMarkup +

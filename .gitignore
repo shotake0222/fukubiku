@@ -10,3 +10,7 @@ tsconfig.tsbuildinfo
 
 # デザイン確認用に生成した一時HTML(セッション中の検証で作成)
 .portaltmp/
+
+# Pythonツールの中間ファイル
+__pycache__/
+*.pyc

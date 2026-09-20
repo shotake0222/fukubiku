@@ -8,6 +8,7 @@ import {
   flatFormatLabel,
   type FormatPref,
 } from "@/lib/presetMatch";
+import { TIER_SET_LABEL, type TierSet } from "@/lib/presetQuickFill";
 
 // カテゴリ選択のボタン列。
 // 抽選セット作成 / 一括作成 / 抽選セット編集 / 営業デモ の4画面に同じものが
@@ -24,6 +25,8 @@ export default function CategoryChips({
   onSelect,
   suffix = "",
   showSelection = true,
+  tierSet,
+  onTierSetChange,
 }: {
   presets: PresetObject[];
   selectedCategory?: string | null;
@@ -31,6 +34,9 @@ export default function CategoryChips({
   onSelect: (category: string, format?: FormatPref) => void;
   suffix?: string;
   showSelection?: boolean;
+  /** 景品の段階。指定するとカテゴリの上に切り替えボタンを出す。 */
+  tierSet?: TierSet;
+  onTierSetChange?: (set: TierSet) => void;
 }) {
   const empties = emptyCategories(presets);
 
@@ -40,8 +46,28 @@ export default function CategoryChips({
         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
           テンプレートが登録されていないカテゴリが {empties.length} 件あります（選択できません）。
           Supabaseで <code className="font-mono">supabase/rebuild_preset_catalog.sql</code> を実行すると、
-          アプリに入っているテンプレート473件がすべて登録されます。
+          アプリに入っているテンプレートがすべて登録されます。
         </p>
+      )}
+      {onTierSetChange && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          <span className="text-slate-500">景品の段階</span>
+          {(["six", "four"] as TierSet[]).map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => onTierSetChange(s)}
+              className={`px-3 py-1 rounded-full border ${
+                tierSet === s ? "bg-slate-900 text-white border-slate-900" : "hover:bg-slate-50"
+              }`}
+            >
+              {TIER_SET_LABEL[s]}
+            </button>
+          ))}
+          <span className="text-slate-400">
+            どちらの段階もすべてのカテゴリで使えます
+          </span>
+        </div>
       )}
       <div className="flex flex-wrap gap-2">
         {PRESET_CATEGORIES.map((cat) => {

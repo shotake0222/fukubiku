@@ -36,6 +36,77 @@
   var AFRAME = window.AFRAME;
   var THREE = AFRAME.THREE;
 
+  // --------------------------------------------------------------
+  // crisp-textures : 読み込んだ.glbのテクスチャを「動かしてもガビガビしない」
+  //                  設定へ揃える。
+  //
+  // three.jsの既定では異方性フィルタリング(anisotropy)が1のままで、
+  // テクスチャを斜めから見た瞬間に急激ににじむ/ちらつく。
+  // 端末が対応している最大値まで上げると、傾けても文字や模様が潰れない。
+  // あわせてミップマップを確実に作らせる(ミップマップが無いと縮小時に
+  // 画素が飛んでチラチラする)。
+  //
+  // シーンに1つ付ければ、以後 model-loaded したモデルすべてに適用される。
+  // --------------------------------------------------------------
+  if (!AFRAME.components["crisp-textures"]) {
+    AFRAME.registerComponent("crisp-textures", {
+      schema: { max: { default: 16 } },
+      init: function () {
+        var self = this;
+        this._done = [];
+        var apply = function (evt) {
+          var el = (evt && evt.target) || null;
+          var obj = el && el.getObject3D && el.getObject3D("mesh");
+          if (obj) self.tune(obj);
+        };
+        // すでに読み終わっているモデルも拾う
+        this.el.addEventListener("model-loaded", apply);
+        this.el.addEventListener("loaded", function () {
+          self.el.object3D.traverse(function (o) {
+            if (o.isMesh) self.tuneMaterial(o.material);
+          });
+        });
+      },
+      maxAniso: function () {
+        var r = this.el.sceneEl ? this.el.sceneEl.renderer : this.el.renderer;
+        if (!r || !r.capabilities || !r.capabilities.getMaxAnisotropy) return 1;
+        return Math.min(this.data.max, r.capabilities.getMaxAnisotropy() || 1);
+      },
+      tune: function (root) {
+        var self = this;
+        root.traverse(function (o) {
+          if (o.isMesh) self.tuneMaterial(o.material);
+        });
+      },
+      tuneMaterial: function (mat) {
+        if (!mat) return;
+        var list = Array.isArray(mat) ? mat : [mat];
+        var aniso = this.maxAniso();
+        for (var i = 0; i < list.length; i++) {
+          var m = list[i];
+          if (!m) continue;
+          var keys = ["map", "emissiveMap", "normalMap", "roughnessMap", "metalnessMap"];
+          for (var k = 0; k < keys.length; k++) {
+            var t = m[keys[k]];
+            if (!t || this._done.indexOf(t) !== -1) continue;
+            this._done.push(t);
+            try {
+              t.anisotropy = aniso;
+              t.generateMipmaps = true;
+              t.minFilter = THREE.LinearMipmapLinearFilter;
+              t.magFilter = THREE.LinearFilter;
+              t.needsUpdate = true;
+            } catch (e) {}
+          }
+          // 半透明バッジが手前の別の半透明物で消える事故を避ける
+          if (m.transparent && m.depthWrite !== false && m.alphaTest === 0) {
+            m.depthWrite = true;
+          }
+        }
+      },
+    });
+  }
+
   // 同じURLに ?cb= を足して、キャッシュを迂回した再取得を1度だけ試す。
   // 壊れた応答(古い404や途中で切れたファイル)がキャッシュに残っている端末で、
   // 再読み込みを促さずに自力で復帰できるようにするため。
