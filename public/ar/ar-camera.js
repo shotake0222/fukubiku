@@ -29,6 +29,15 @@
  *   → マーカーが見つからない状態が続いたら「少し離す/タップ」の案内を出す。
  *
  * ?debug=1 の診断パネルに、実際の解像度とフォーカス設定が出る(window.__AR_DIAG.camera)。
+ *
+ * 【2026-09-23 既定では無効化】
+ * 本番で「マーカーが全く反応しなくなった」との報告があったため、
+ * カメラへの要求の書き換え(高解像度化)と applyConstraints(フォーカス指定・
+ * タップでのピント合わせ)は、既定では一切行わないようにした。
+ * 端末によっては applyConstraints がカメラを再構成して映像サイズが途中で
+ * 変わり、MindAR / AR.js が最初に確保したサイズと食い違って検出が止まる。
+ * 実機で検証するときだけ、URL に ?hd=1 を付けると従来の強化版が動く。
+ * 既定で残しているのは、診断の記録(読み取りのみ)と案内の表示だけ。
  */
 (function () {
   "use strict";
@@ -42,6 +51,10 @@
     } catch (e) {}
   }
   if (!md || !md.getUserMedia || md.__arCameraWrapped) return;
+
+  // ?hd=1 のときだけカメラ設定に手を加える(既定は動作実績のある元のまま)
+  var HD = /[?&]hd=1(?:&|$)/.test(location.search);
+  C.mode = HD ? "hd(検証用)" : "safe(既定)";
 
   var LONG_SIDE = 1280;
   var original = md.getUserMedia.bind(md);
@@ -111,6 +124,10 @@
     C.focusDistance = c.focusDistance || null;
     var r = ratioOf(track);
     C.size = r ? r.size : null;
+    if (!HD) {
+      C.focus = "端末の既定のまま(safe)";
+      return;
+    }
     if (hasMode("continuous")) {
       track
         .applyConstraints({ advanced: [{ focusMode: "continuous" }] })
@@ -122,7 +139,7 @@
   }
 
   md.getUserMedia = function (constraints) {
-    var up = upgrade(constraints);
+    var up = HD ? upgrade(constraints) : null;
     var p;
     if (!up) {
       p = original(constraints);
@@ -208,14 +225,16 @@
     }
     return false;
   }
-  document.addEventListener(
-    "pointerup",
-    function (e) {
-      if (isUi(e.target)) return;
-      refocus();
-    },
-    true
-  );
+  if (HD) {
+    document.addEventListener(
+      "pointerup",
+      function (e) {
+        if (isUi(e.target)) return;
+        refocus();
+      },
+      true
+    );
+  }
 
   // ---------------------------------------------------------------
   // マーカーが見つからない状態が続いたら、距離とピントの案内を出す
@@ -235,9 +254,9 @@
         "border-radius:12px;background:rgba(15,23,42,.8);color:#fff;text-align:center;" +
         "font:bold 13px/1.6 system-ui,-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;" +
         "pointer-events:none";
-      hint.innerHTML =
-        "マーカーが映らないときは<br>" +
-        "スマホを少し離して(20cmほど) / 画面をタップしてピント合わせ";
+      hint.innerHTML = HD
+        ? "マーカーが映らないときは<br>スマホを少し離して(20cmほど) / 画面をタップしてピント合わせ"
+        : "マーカーが映らないときは<br>スマホを少し離して、マーカー全体を画面に入れてください";
       document.body.appendChild(hint);
     }
     hint.style.display = "block";

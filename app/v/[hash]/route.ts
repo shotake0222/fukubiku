@@ -41,19 +41,18 @@ const VIA_HEADER = "x-fukubiku-via";
 //
 // A-Frameはモバイルだと antialias を既定でオフにする(実装: setupRenderer の
 // antialias:!isMobile)。オフだとポリゴンの輪郭が階段状になり、端末を少し
-// 動かすだけでその階段がチラチラと動く(いわゆる「ガビガビ」)。
-// 近年の端末はMSAAをタイル内で処理できるので、明示的にオンにする。
+// 動かすだけでその階段がチラチラと動く(いわゆる「ガビガビ」)ので、これだけ足す。
 //
-//  antialias   : 輪郭のギザギザを消す。ガビガビ対策の本命。
-//  precision   : シェーダの計算精度。既定はモバイルでmediumpになることがあり、
-//                グラデーションに縞が出る。highpを要求する。
-//  colorManagement / physicallyCorrectLights: 従来どおり(色味を変えない)。
-//  maxCanvasWidth/Height: 既定1920。高精細端末で描画解像度が足りず
-//                ぼやける/ジャギーが目立つ原因になるので2560まで許可する。
-//                (実際の倍率は cap-pixel-ratio が2倍で頭打ちにしている)
-const RENDERER_ATTR =
-  "antialias: true; precision: high; colorManagement: true;" +
-  " physicallyCorrectLights: true; maxCanvasWidth: 2560; maxCanvasHeight: 2560";
+// 【2026-09-23】以前はここで physicallyCorrectLights / precision / maxCanvas も
+// 変えていたが、physicallyCorrectLights を有効にするとライトの強さの解釈が
+// 変わってモデルが暗く沈む(実測で確認)。「マーカーが反応しない」報告を受けて
+// 動作実績のある元の設定へ戻し、antialias だけを加える形にした。
+//  ・AR.js  : 元は renderer 指定なし → antialias だけ
+//  ・MindAR : 元は "colorManagement: true, physicallyCorrectLights"
+//             (区切りが「,」のため physicallyCorrectLights は実際には効いていなかった)
+//             → 同じ見え方になる colorManagement: true + antialias
+const RENDERER_ATTR_ARJS = "antialias: true";
+const RENDERER_ATTR_MINDAR = "antialias: true; colorManagement: true";
 
 // マーカーの姿勢を「マーカーの外側にある別エンティティ(ステージ)」へ写して描画する。
 //
@@ -396,7 +395,7 @@ function buildArHtml(opts: {
 
   const sceneMarkup = opts.useMindAr
     ? '<a-scene mindar-image="imageTargetSrc: ' + esc(opts.mindFileUrl || "") + '; uiScanning: no; uiLoading: no;"' +
-      ' color-space="sRGB" renderer="' + RENDERER_ATTR + '"' +
+      ' color-space="sRGB" renderer="' + RENDERER_ATTR_MINDAR + '"' +
       ' vr-mode-ui="enabled: false" device-orientation-permission-ui="enabled: false"' +
       ' cap-pixel-ratio crisp-textures>' +
       '<a-camera position="0 0 0" look-controls="enabled: false"></a-camera>' +
@@ -414,7 +413,7 @@ function buildArHtml(opts: {
       // 検出間のフレームはmarker-pose側の補間が埋めるので見た目は滑らかになる。
       ' arjs="debugUIEnabled:false; trackingMethod:best; patternRatio: 0.9;' +
       ' maxDetectionRate: 30; cameraParametersUrl: /vendor/camera_para.dat;"' +
-      ' color-space="sRGB" renderer="' + RENDERER_ATTR + '"' +
+      ' renderer="' + RENDERER_ATTR_ARJS + '"' +
       ' vr-mode-ui="enabled: false" cap-pixel-ratio crisp-textures>' +
       '<a-marker id="ar-target" preset="custom" type="pattern" url="' + esc(opts.markerUrl) + '"' +
       poseAttr + "></a-marker>" +
