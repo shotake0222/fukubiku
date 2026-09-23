@@ -126,9 +126,9 @@ create unique index if not exists preset_objects_model_url_idx on preset_objects
 --    名前・カテゴリ・サムネ・service を正す。idは変えないので、
 --    既存の注文や抽選セットの紐付けはそのまま残る。
 --
---    2026-09: 全53カテゴリで 1等〜6等 と 大当たり/当たり/クーポン/はずれ の
+--    2026-09: 全73カテゴリで 1等〜6等 と 大当たり/当たり/クーポン/はずれ の
 --    10等級すべてを選べるようにした（以前はカテゴリごとに6種または4種しか
---    無かった）。不足していた.glbは tools/badge/expand_tiers.py が生成する。
+--    無かった）。.glb は tools/templates/ の build.py / build_v2.py が生成する。
 --    サムネイルPNGも tools/thumbs/render.py で全件そろえてある。
 --
 --    mp4_grp : 透過MP4素材がある等級グループ（この6カテゴリだけMP4がある。
