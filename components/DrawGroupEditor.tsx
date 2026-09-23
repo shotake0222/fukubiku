@@ -9,6 +9,7 @@ import type { DisplayType, DrawGroup, DrawGroupEntry, ObjectSource, PresetObject
 import { DEFAULT_TIER_WEIGHTS } from "@/lib/types";
 import TemplatePicker, { PresetPreview } from "@/components/TemplatePicker";
 import CategoryChips from "@/components/CategoryChips";
+import QrAccessPanel from "@/components/QrAccessPanel";
 import { resolvePresetForTier, type FormatPref } from "@/lib/presetMatch";
 import { quickFillLabels, defaultTierSet, type TierSet } from "@/lib/presetQuickFill";
 
@@ -513,7 +514,17 @@ export default function DrawGroupEditor({
             {copyOk ? "コピーしました" : "コピー"}
           </button>
         </div>
+        <p className="text-xs text-slate-500">NFCタグにはこのURLを書き込んでください。</p>
       </section>
+
+      <QrAccessPanel
+        kind="group"
+        id={group.id}
+        hash={group.hash}
+        siteOrigin={siteOrigin}
+        initialToken={group.qr_token}
+        initialEnabled={group.qr_enabled}
+      />
     </div>
   );
 }

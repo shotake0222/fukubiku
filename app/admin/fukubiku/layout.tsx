@@ -4,7 +4,7 @@ import Link from "next/link";
 export default function FukubikuLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="space-y-6">
-      <nav className="flex items-center gap-4 text-sm border-b-2 border-emerald-100 pb-3">
+      <nav className="no-print print:hidden flex items-center gap-4 text-sm border-b-2 border-emerald-100 pb-3">
         <Link href="/admin" className="text-slate-400 hover:text-slate-900">
           ← サービス切替
         </Link>

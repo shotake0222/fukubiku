@@ -57,6 +57,27 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "tanabata", label: "七夕" },
   { value: "sushi", label: "回転寿司" },
   { value: "taiyaki", label: "たい焼き" },
+  // 2026-09 追加(tools/templates/extra.py)
+  { value: "kusudama", label: "くす玉" },
+  { value: "bingo", label: "ビンゴ" },
+  { value: "striker", label: "力試しハンマー" },
+  { value: "soccer", label: "サッカーPK" },
+  { value: "basketball", label: "バスケットボール" },
+  { value: "crystal", label: "水晶玉占い" },
+  { value: "giftbox", label: "プレゼント箱" },
+  { value: "suikawari", label: "スイカ割り" },
+  { value: "snowman", label: "雪だるま" },
+  { value: "tako", label: "凧揚げ" },
+  { value: "koinobori", label: "こいのぼり" },
+  { value: "tsukimi", label: "お月見" },
+  { value: "furin", label: "風鈴" },
+  { value: "jubako", label: "重箱（おせち）" },
+  { value: "ramen", label: "ラーメン" },
+  { value: "coffee", label: "コーヒー" },
+  { value: "toaster", label: "トースター" },
+  { value: "beer", label: "ビール" },
+  { value: "cake", label: "ケーキ" },
+  { value: "pizza", label: "ピザ" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";
@@ -139,6 +160,13 @@ export interface DrawGroup {
    * 確率(重み)とは別に抽選セットごとに設定する(lib/drawCooldown.ts参照)。 */
   cooldown_hours: number;
 
+  /** NFC非対応端末向けのQR専用URL(/q/<qr_token>)。未発行なら null。
+   * add_qr_access.sql 未実行の環境では列自体が無いので undefined になりうる。 */
+  qr_token?: string | null;
+  /** QR専用URLを受け付けるか。停止すると /q/<token> は案内ページになる。 */
+  qr_enabled?: boolean | null;
+  qr_issued_at?: string | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -187,6 +215,13 @@ export interface Order {
   /** quantity(個数)を「どの期間あたりの上限」とみなすか。
    * "day" | "3days" | "week" | "none"(既定)。lib/drawLimit.ts 参照。 */
   limit_period: string | null;
+
+  /** NFC非対応端末向けのQR専用URL(/q/<qr_token>)。未発行なら null。
+   * add_qr_access.sql 未実行の環境では列自体が無いので undefined になりうる。 */
+  qr_token?: string | null;
+  /** QR専用URLを受け付けるか。停止すると /q/<token> は案内ページになる。 */
+  qr_enabled?: boolean | null;
+  qr_issued_at?: string | null;
 
   created_at: string;
   updated_at: string;

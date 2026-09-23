@@ -3,6 +3,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import QrAccessPanel from "@/components/QrAccessPanel";
 import { compileMindTarget, ensureMindArCompiler } from "@/lib/mindCompiler";
 import OrderDetailsForm, { type OrderDetailsValue } from "@/components/OrderDetailsForm";
 import type { DisplayType, ObjectSource, Order, PresetObject } from "@/lib/types";
@@ -357,7 +358,17 @@ export default function OrderEditor({
             表示オブジェクト（MindARの場合はターゲット画像のコンパイルも）を設定して保存すると「公開準備完了」になります。
           </p>
         )}
+        <p className="text-xs text-slate-500">NFCタグにはこのURLを書き込んでください。</p>
       </section>
+
+      <QrAccessPanel
+        kind="order"
+        id={order.id}
+        hash={order.hash}
+        siteOrigin={siteOrigin}
+        initialToken={order.qr_token}
+        initialEnabled={order.qr_enabled}
+      />
     </div>
   );
 }
