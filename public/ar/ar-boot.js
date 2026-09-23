@@ -58,6 +58,16 @@
       WebGL: glVersion,
       GPU: renderer,
       カメラ映像: cam ? cam.videoWidth + "x" + cam.videoHeight + " readyState" + cam.readyState : "なし",
+      カメラ設定: D.camera
+        ? {
+            高解像度化: D.camera.upgraded,
+            取得サイズ: D.camera.size,
+            フォーカス: D.camera.focus,
+            対応モード: D.camera.focusModes,
+            最短距離: D.camera.focusDistance,
+            経過: (D.camera.events || []).slice(-8),
+          }
+        : "なし",
       結果動画: v
         ? {
             src: v.currentSrc || v.src,

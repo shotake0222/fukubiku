@@ -33,6 +33,9 @@ export const dynamic = "force-dynamic";
 //  キャッシュが効く・HTMLが軽くなる、が同時に得られる)
 const AR_OBJECTS_SRC = "/ar/ar-objects.js";
 const AR_BOOT_SRC = "/ar/ar-boot.js";
+const AR_CAMERA_SRC = "/ar/ar-camera.js";
+// /q/[token]/route.ts と共有するヘッダ名(QR専用URLから呼ばれたことを伝える)。
+const VIA_HEADER = "x-fukubiku-via";
 
 // <a-scene renderer="..."> に渡す描画設定。
 //
@@ -218,7 +221,7 @@ function pickWeighted(entries: DrawGroupEntry[]): DrawGroupEntry | null {
   return entries[entries.length - 1];
 }
 
-// 全29カテゴリに <カテゴリ>_suspense_3d.glb と <カテゴリ>_cookie_3d.glb が存在する
+// 全73カテゴリに <カテゴリ>_suspense_3d.glb と <カテゴリ>_cookie_3d.glb が存在する
 // (public/presets/ 配下。存在は実ファイルで確認済み)。
 const CATEGORY_SLUGS = new Set(PRESET_CATEGORIES.map((c) => c.value));
 
@@ -443,6 +446,9 @@ function buildArHtml(opts: {
     // 読み込み状況の記録先を最初に用意する(この後のonerrorが参照する)。
     "<script>window.__AR_DIAG={scripts:{},startedAt:Date.now()};" +
       "function __arScript(n,s){window.__AR_DIAG.scripts[n]=s;}<\/script>",
+    // カメラの要求に手を加える(高解像度化・連続AF・タップでピント合わせ)。
+    // AR.js / MindAR が getUserMedia を呼ぶより前に読み込む必要がある。
+    lib("ar-camera", AR_CAMERA_SRC),
     lib("aframe", "/vendor/aframe-1.5.0.min.js"),
     lib("aframe-extras", "/vendor/aframe-extras-7.7.0.min.js"),
     engineScript,
@@ -569,12 +575,34 @@ function buildArHtml(opts: {
   ].join("\n");
 }
 
+// 抽選(表示)を1行記録し、その行のidを返す。
+// draw_logs.via 列は add_qr_access.sql で追加する。未実行の環境でも
+// 表示そのものは止めないよう、列が無ければ via なしで記録し直す。
+async function recordDraw(
+  supabase: ReturnType<typeof createAdminClient>,
+  hash: string,
+  via: "nfc" | "qr"
+): Promise<string | null> {
+  const first = await supabase.from("draw_logs").insert({ hash, via }).select("id").single();
+  if (!first.error) return (first.data as { id: string } | null)?.id ?? null;
+  const code = (first.error as { code?: string }).code;
+  if (code === "42703" || code === "PGRST204") {
+    const retry = await supabase.from("draw_logs").insert({ hash }).select("id").single();
+    return retry.error ? null : (retry.data as { id: string } | null)?.id ?? null;
+  }
+  return null;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: { hash: string } }
 ): Promise<Response> {
   const supabase = createAdminClient();
   const markerUrl = "/markers/patternkuji.patt";
+  // どこから開かれたか。/q/<token>(QR専用URL)から来た場合は、そのルートが
+  // このヘッダを付けてこのハンドラを呼ぶ。それ以外(NFCタグ・URL直打ち)は "nfc"。
+  // 集計にしか使わないので、外部から偽装されても実害はない。
+  const via: "nfc" | "qr" = _request.headers.get(VIA_HEADER) === "qr" ? "qr" : "nfc";
   // エラー画面の「キャッシュを使わずに再読み込み」から戻ってきたときだけ立つ。
   const nocache = new URL(_request.url).searchParams.get("nocache") === "1";
 
@@ -685,6 +713,12 @@ export async function GET(
         "; Path=/; SameSite=Lax"
       : undefined;
 
+  // --- 表示の記録 ---
+  // NFC(通常URL)とQR専用URLのどちらから引かれたかを集計するため、
+  // 実際に抽選(表示)したものはすべて1行ずつ記録する。
+  // 表示回数の上限(下記)もこの記録を数えて判定する。
+  const logRowId = await recordDraw(supabase, params.hash, via);
+
   // --- 表示回数の上限(注文フローのみ) ---
   // Cookieは端末ごとにしか効かないため、景品の個数そのものを守るには
   // サーバー側で実際の表示回数を数える必要がある。
@@ -693,15 +727,8 @@ export async function GET(
     const period = isLimitPeriod(order.limit_period) ? order.limit_period : "none";
     const windowStart = limitWindowStart(period);
     if (windowStart) {
-      // 先に1行記録してから件数を数える。
-      // 「数えてから記録」だと同時アクセスで上限を超えて配布されうるが、
-      // 「記録してから数える」なら各リクエストが必ず異なる件数を見るため超過しない。
-      const { data: logRow } = await supabase
-        .from("draw_logs")
-        .insert({ hash: params.hash })
-        .select("id")
-        .single();
-
+      // 「記録してから数える」。数えてから記録すると、同時アクセスで
+      // 上限を超えて配布されうるが、この順なら各リクエストが必ず異なる件数を見る。
       const { count } = await supabase
         .from("draw_logs")
         .select("id", { count: "exact", head: true })
@@ -710,7 +737,7 @@ export async function GET(
 
       if ((count ?? 0) > order.quantity) {
         // 自分の分は配布しなかったので記録から取り消す(件数を正確に保つ)
-        if (logRow?.id) await supabase.from("draw_logs").delete().eq("id", logRow.id);
+        if (logRowId) await supabase.from("draw_logs").delete().eq("id", logRowId);
         return simplePage(esc(buildLimitReachedMessage(period)));
       }
     }
