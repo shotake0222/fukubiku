@@ -1,11 +1,11 @@
 -- ============================================================
 -- fukubiku テンプレート台帳の再構築（何度でも実行可・冪等）
 --
--- これ1本で preset_objects を「アプリに実在するテンプレート620件」と
+-- これ1本で preset_objects を「アプリに実在するテンプレート840件」と
 -- 一致した状態へ戻します。seed_presets.sql / seed_object_presets.sql 〜 v7.sql の
 -- どれを実行済みかを気にする必要はありません。
 --
--- 2026-09 更新: 全53カテゴリで10等級（1等〜6等／大当たり・当たり・クーポン・
+-- 2026-09 更新: 全73カテゴリ(うち20種は新規)で10等級（1等〜6等／大当たり・当たり・クーポン・
 -- はずれ）が選べるようになりました。実行すると管理画面の選択肢が増えます。
 --
 -- 【設計方針】
@@ -122,7 +122,7 @@ create unique index if not exists preset_objects_model_url_idx on preset_objects
 -- ------------------------------------------------------------
 -- 4) 台帳を流し込む（これが本体）
 --
---    public/presets/ に実在する620件を登録し、既にある行は
+--    public/presets/ に実在する840件を登録し、既にある行は
 --    名前・カテゴリ・サムネ・service を正す。idは変えないので、
 --    既存の注文や抽選セットの紐付けはそのまま残る。
 --
@@ -187,7 +187,27 @@ with cat(value, label, mp4_grp) as (values
   ('valentine', 'バレンタイン', null),
   ('tanabata', '七夕', null),
   ('sushi', '回転寿司', null),
-  ('taiyaki', 'たい焼き', null)
+  ('taiyaki', 'たい焼き', null),
+  ('kusudama', 'くす玉', null),
+  ('bingo', 'ビンゴ', null),
+  ('striker', '力試しハンマー', null),
+  ('soccer', 'サッカーPK', null),
+  ('basketball', 'バスケットボール', null),
+  ('crystal', '水晶玉占い', null),
+  ('giftbox', 'プレゼント箱', null),
+  ('suikawari', 'スイカ割り', null),
+  ('snowman', '雪だるま', null),
+  ('tako', '凧揚げ', null),
+  ('koinobori', 'こいのぼり', null),
+  ('tsukimi', 'お月見', null),
+  ('furin', '風鈴', null),
+  ('jubako', '重箱（おせち）', null),
+  ('ramen', 'ラーメン', null),
+  ('coffee', 'コーヒー', null),
+  ('toaster', 'トースター', null),
+  ('beer', 'ビール', null),
+  ('cake', 'ケーキ', null),
+  ('pizza', 'ピザ', null)
 ),
 tier(key, ja, grp) as (values
   ('1tou',    '1等',     'six'),
@@ -276,7 +296,7 @@ delete from preset_objects p
 -- ------------------------------------------------------------
 -- 7) 結果の確認
 -- ------------------------------------------------------------
--- fukubiku_total が 620（glb 584 + mp4 36）、gif_remaining と
+-- fukubiku_total が 840（glb 804 + mp4 36）、gif_remaining と
 -- absolute_url_remaining と service_null_remaining が 0 なら成功。
 select
   count(*) filter (where service = 'fukubiku')                      as fukubiku_total,
@@ -287,7 +307,7 @@ select
   count(*) filter (where service is null)                           as service_null_remaining
 from preset_objects;
 
--- カテゴリごとの内訳。53カテゴリ＋common が並び、
+-- カテゴリごとの内訳。73カテゴリ＋common が並び、
 -- 各カテゴリ glb=11、amida/box/omikuji は mp4=7、
 -- darts/garagara/scratch は mp4=5、common は glb=1 なら正常。
 select category,

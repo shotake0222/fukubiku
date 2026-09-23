@@ -25,7 +25,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "badge"))
-from glbedit import read_glb  # noqa: E402
+from glbedit import read_glb, load_buffers  # noqa: E402
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
 PRESETS = os.path.join(ROOT, "public", "presets")
@@ -40,11 +40,19 @@ COMP = {5120: "b", 5121: "B", 5122: "h", 5123: "H", 5125: "I", 5126: "f"}
 NCOMP = {"SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4, "MAT4": 16}
 
 
+def _buf(bc, bv):
+    """bc は埋め込みバッファ(bytes)か、全バッファのリスト。"""
+    if isinstance(bc, list):
+        return bc[bv.get("buffer", 0)]
+    return bc
+
+
 def accessor(js, bc, idx):
     a = js["accessors"][idx]
     n = NCOMP[a["type"]]
     fmt = COMP[a["componentType"]]
     bv = js["bufferViews"][a["bufferView"]]
+    bc = _buf(bc, bv)
     off = bv.get("byteOffset", 0) + a.get("byteOffset", 0)
     count = a["count"]
     itemsize = np.dtype(fmt).itemsize * n
@@ -128,7 +136,7 @@ def load_texture(js, bc, tex_index):
     im = js["images"][src]
     bv = js["bufferViews"][im["bufferView"]]
     off = bv.get("byteOffset", 0)
-    data = bc[off:off + bv["byteLength"]]
+    data = _buf(bc, bv)[off:off + bv["byteLength"]]
     img = Image.open(io.BytesIO(data)).convert("RGBA")
     if max(img.size) > 256:
         img = img.resize((min(256, img.size[0]), min(256, img.size[1])), Image.LANCZOS)
@@ -186,6 +194,7 @@ def sample(tex, u, v):
 
 def render(path, size=OUT):
     js, bc = read_glb(path)
+    bc = load_buffers(path, js, bc)
     prims = gather(js, bc)
     if not prims:
         return None

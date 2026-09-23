@@ -25,7 +25,7 @@ def build():
     b = G.Builder()
 
     # 「またね」の文字＋光。バッジと同じ作り方なので見た目が揃う。
-    t = b.add_texture(tex.to_png(tex.badge_image("またね"), 255), "badge_またね")
+    t = b.add_texture(tex.badge_png("またね"), "badge_またね")
     m = b.add_material("badge_またね", texture=t, alpha_mode="BLEND", roughness=0.9,
                        emissive=(0.55, 0.55, 0.55), emissive_texture=True)
     mesh = b.add_mesh([G.prim(G.plane(1.0, 1.0), m)], "badge")

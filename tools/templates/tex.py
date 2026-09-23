@@ -102,6 +102,13 @@ def paper(size=(512, 512), base=(246, 240, 224), seed=1):
     return vignette(grain(img, 8, seed), 0.22)
 
 
+def badge_png(label):
+    """.glb に埋め込む最終形の結果バッジPNG(bytes)。"""
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "badge"))
+    import gen_badges
+    return gen_badges.badge_png(label)
+
+
 def badge_image(label):
     """結果バッジ。tools/badge/gen_badges.py の実装をそのまま使う。"""
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "badge"))

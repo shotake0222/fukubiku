@@ -112,6 +112,28 @@ export const QUICK_FILL: Record<string, string[]> = {
   tanabata: TIER_LABELS_6,
   sushi: TIER_LABELS_6,
   taiyaki: TIER_LABELS_6,
+
+  // 2026-09 追加の20種(tools/templates/extra.py)。どれも10等級そろっている。
+  kusudama: TIER_LABELS_6,
+  bingo: TIER_LABELS_6,
+  striker: TIER_LABELS_6,
+  soccer: TIER_LABELS_6,
+  basketball: TIER_LABELS_6,
+  crystal: TIER_LABELS_6,
+  giftbox: TIER_LABELS_6,
+  suikawari: TIER_LABELS_6,
+  snowman: TIER_LABELS_6,
+  tako: TIER_LABELS_6,
+  koinobori: TIER_LABELS_6,
+  tsukimi: TIER_LABELS_6,
+  furin: TIER_LABELS_6,
+  jubako: TIER_LABELS_6,
+  ramen: TIER_LABELS_6,
+  coffee: TIER_LABELS_6,
+  toaster: TIER_LABELS_6,
+  beer: TIER_LABELS_6,
+  cake: TIER_LABELS_6,
+  pizza: TIER_LABELS_6,
 };
 
 function inCategory(p: PresetObject, category: string): boolean {

@@ -49,6 +49,9 @@ def repack(js, binchunk, replacements=None):
     replacements = replacements or {}
     newbin = bytearray()
     for i, bv in enumerate(js["bufferViews"]):
+        # 共有 .bin(buffers[1] 以降)を指すものは触らない(tools/glb/dedupe.py 参照)
+        if bv.get("buffer", 0) != 0:
+            continue
         data = replacements.get(i)
         if data is None:
             o = bv.get("byteOffset", 0)
@@ -61,6 +64,16 @@ def repack(js, binchunk, replacements=None):
     js["buffers"][0]["byteLength"] = len(newbin)
     js["buffers"][0].pop("uri", None)
     return bytes(newbin)
+
+
+def load_buffers(path, js, bin0):
+    """buffers[0](埋め込み)と、uri で参照している外部 .bin をまとめて返す。"""
+    import os
+    out = [bin0]
+    for b in js.get("buffers", [])[1:]:
+        uri = b.get("uri")
+        out.append(open(os.path.join(os.path.dirname(path), uri), "rb").read() if uri else b"")
+    return out
 
 
 def badge_image_index(js):

@@ -118,6 +118,9 @@ def apply_to(path, badges, dry=False, rename_to=None):
         return [target]
     tune_badge_materials(js)
     bv = js["images"][image_index]["bufferView"]
+    if js["bufferViews"][bv].get("buffer", 0) != 0:
+        print("  ! バッジ画像が共有.binにあるため差し替えられません:", os.path.basename(path))
+        return None
     binchunk = repack(js, binchunk, {bv: badges[target]})
     write_glb(path, js, binchunk)
     return [target]

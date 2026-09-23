@@ -169,19 +169,33 @@ def dither(img, amp=3):
     return img
 
 
+import functools
+
+
+@functools.lru_cache(maxsize=None)
+def badge_png(label):
+    """.glb に埋め込む最終形のPNG(bytes)。main() が書き出すものと完全に同じ。
+
+    テンプレート生成側(build.py / kit.py)もこれを使うこと。
+    make_badge() の戻り値は描画用の1024pxなので、そのまま埋め込むと
+    大きすぎるうえ減色で縞が出る。
+    """
+    import io
+    img = make_badge(label, RANK.get(label, "gold"))
+    img = img.resize((OUT_SIZE, OUT_SIZE), Image.LANCZOS)
+    img = dither(img, 1).quantize(colors=255, method=Image.FASTOCTREE)
+    buf = io.BytesIO()
+    img.save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
+
 def main():
     outdir = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "out")
     os.makedirs(outdir, exist_ok=True)
     for label in LABELS:
-        img = make_badge(label, RANK.get(label, "gold"))
-        # GLBに埋め込むのでファイルサイズを抑える。
-        # FASTOCTREEはアルファを保持したまま減色できる。
-        # 1024で描いてから512へ縮める(スーパーサンプリング)。
-        # 直接512で描くより文字の輪郭がなめらかになり、かつファイルは小さい。
-        img = img.resize((OUT_SIZE, OUT_SIZE), Image.LANCZOS)
-        img = dither(img, 1).quantize(colors=255, method=Image.FASTOCTREE)
+        # 1024で描いてから512へ縮め(スーパーサンプリング)、弱いディザを掛けて減色する。
         path = os.path.join(outdir, "badge_%s.png" % label)
-        img.save(path, "PNG", optimize=True)
+        open(path, "wb").write(badge_png(label))
         print(path, os.path.getsize(path) // 1024, "KB")
 
 

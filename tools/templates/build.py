@@ -45,7 +45,7 @@ def add_badge(b, label, size=0.66):
     """結果バッジの板。labelがNoneなら作らない(焦らし用)。"""
     if not label:
         return None, None
-    t = b.add_texture(tex.to_png(tex.badge_image(label), 128), "badge_%s" % label)
+    t = b.add_texture(tex.badge_png(label), "badge_%s" % label)
     # BLEND + emissive。バッジは「文字＋光」で、光の縁がなめらかに消えるため、
     # MASK(切り抜き)にすると光の外周に硬い輪が出てしまう。
     m = b.add_material("badge_%s" % label, texture=t, alpha_mode="BLEND", roughness=0.9,
