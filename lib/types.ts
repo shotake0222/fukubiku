@@ -78,6 +78,17 @@ export const PRESET_CATEGORIES: { value: string; label: string }[] = [
   { value: "beer", label: "ビール" },
   { value: "cake", label: "ケーキ" },
   { value: "pizza", label: "ピザ" },
+  // 2026-09 追加その2(tools/templates/extra2.py)
+  { value: "balloon", label: "風船割り" },
+  { value: "golf", label: "ゴルフ" },
+  { value: "baseball", label: "ホームラン" },
+  { value: "cards", label: "トランプ" },
+  { value: "saisen", label: "神社の鈴" },
+  { value: "yakiimo", label: "焼き芋" },
+  { value: "takoyaki", label: "たこ焼き" },
+  { value: "burger", label: "ハンバーガー" },
+  { value: "postbox", label: "郵便ポスト" },
+  { value: "momiji", label: "紅葉" },
 ];
 
 export type ServiceTag = "fukubiku" | "attend";

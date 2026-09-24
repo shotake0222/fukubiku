@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""legacy.py(旧29カテゴリの作り直し)と extra.py(新20カテゴリ)をまとめて書き出す。
+"""legacy.py(旧29カテゴリの作り直し)と extra.py(新20カテゴリ)・extra2.py(追加10カテゴリ)をまとめて書き出す。
 
   python3 tools/templates/build_v2.py            # 全部
   python3 tools/templates/build_v2.py dice cake  # カテゴリを絞る
@@ -20,10 +20,12 @@ sys.path.insert(0, os.path.join(HERE, "..", "glb"))
 sys.path.insert(0, HERE)
 import legacy
 import extra
+import extra2
 from build import TIERS, OUT_ROOT
 
 BUILDERS = dict(legacy.BUILDERS)
 BUILDERS.update(extra.BUILDERS)
+BUILDERS.update(extra2.BUILDERS)
 
 
 def main():

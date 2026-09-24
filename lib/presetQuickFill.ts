@@ -134,6 +134,17 @@ export const QUICK_FILL: Record<string, string[]> = {
   beer: TIER_LABELS_6,
   cake: TIER_LABELS_6,
   pizza: TIER_LABELS_6,
+  // 2026-09 追加その2の10種(tools/templates/extra2.py)。どれも10等級そろっている。
+  balloon: TIER_LABELS_6,
+  golf: TIER_LABELS_6,
+  baseball: TIER_LABELS_6,
+  cards: TIER_LABELS_6,
+  saisen: TIER_LABELS_6,
+  yakiimo: TIER_LABELS_6,
+  takoyaki: TIER_LABELS_6,
+  burger: TIER_LABELS_6,
+  postbox: TIER_LABELS_6,
+  momiji: TIER_LABELS_6,
 };
 
 function inCategory(p: PresetObject, category: string): boolean {
